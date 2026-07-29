@@ -1,0 +1,380 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A1D101012000000100000000 /* DevonthinkExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D101022000000100000000 /* DevonthinkExtension.swift */; };
+		A1D101032000000100000000 /* DevonthinkCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D101042000000100000000 /* DevonthinkCatalog.swift */; };
+		A1D101052000000100000000 /* DevonthinkItems.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D101062000000100000000 /* DevonthinkItems.swift */; };
+		A1D101072000000100000000 /* DevonthinkActionsCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D101082000000100000000 /* DevonthinkActionsCatalog.swift */; };
+		A1D101092000000100000000 /* DevonthinkData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D1010A2000000100000000 /* DevonthinkData.swift */; };
+		A1D1010B2000000100000001 /* DEVONthinkBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D1010C2000000100000001 /* DEVONthinkBridge.swift */; };
+		A2E202052000000100000000 /* QuickLookExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2E202012000000100000000 /* QuickLookExtension.swift */; };
+		A2E202062000000100000000 /* QuickLookActionsCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2E202022000000100000000 /* QuickLookActionsCatalog.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A1D1010B2000000100000000 /* DevonthinkExtension.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = DevonthinkExtension.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1D101022000000100000000 /* DevonthinkExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevonthinkExtension.swift; sourceTree = "<group>"; };
+		A1D101042000000100000000 /* DevonthinkCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevonthinkCatalog.swift; sourceTree = "<group>"; };
+		A1D101062000000100000000 /* DevonthinkItems.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevonthinkItems.swift; sourceTree = "<group>"; };
+		A1D101082000000100000000 /* DevonthinkActionsCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevonthinkActionsCatalog.swift; sourceTree = "<group>"; };
+		A1D1010A2000000100000000 /* DevonthinkData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevonthinkData.swift; sourceTree = "<group>"; };
+		A1D1010C2000000100000000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A1D1010C2000000100000001 /* DEVONthinkBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DEVONthinkBridge.swift; sourceTree = "<group>"; };
+		A2E202012000000100000000 /* QuickLookExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLookExtension.swift; sourceTree = "<group>"; };
+		A2E202022000000100000000 /* QuickLookActionsCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLookActionsCatalog.swift; sourceTree = "<group>"; };
+		A2E202032000000100000000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A2E202042000000100000000 /* QuickLookExtension.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = QuickLookExtension.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A1D1010D2000000100000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2E2020A2000000100000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A1D101002000000100000000 = {
+			isa = PBXGroup;
+			children = (
+				A1D1010E2000000100000000 /* DevonthinkExtension */,
+				A2E202072000000100000000 /* QuickLookExtension */,
+				A1D1010F2000000100000000 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A1D1010E2000000100000000 /* DevonthinkExtension */ = {
+			isa = PBXGroup;
+			children = (
+				A1D101022000000100000000 /* DevonthinkExtension.swift */,
+				A1D101042000000100000000 /* DevonthinkCatalog.swift */,
+				A1D101062000000100000000 /* DevonthinkItems.swift */,
+				A1D101082000000100000000 /* DevonthinkActionsCatalog.swift */,
+				A1D1010A2000000100000000 /* DevonthinkData.swift */,
+				A1D1010C2000000100000001 /* DEVONthinkBridge.swift */,
+				A1D1010C2000000100000000 /* Info.plist */,
+			);
+			path = DevonthinkExtension;
+			sourceTree = "<group>";
+		};
+		A1D1010F2000000100000000 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A1D1010B2000000100000000 /* DevonthinkExtension.framework */,
+				A2E202042000000100000000 /* QuickLookExtension.framework */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A2E202072000000100000000 /* QuickLookExtension */ = {
+			isa = PBXGroup;
+			children = (
+				A2E202012000000100000000 /* QuickLookExtension.swift */,
+				A2E202022000000100000000 /* QuickLookActionsCatalog.swift */,
+				A2E202032000000100000000 /* Info.plist */,
+			);
+			path = QuickLookExtension;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A1D101102000000100000000 /* DevonthinkExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1D101112000000100000000 /* Build configuration list for PBXNativeTarget "DevonthinkExtension" */;
+			buildPhases = (
+				A1D101122000000100000000 /* Sources */,
+				A1D1010D2000000100000000 /* Frameworks */,
+				A1D101132000000100000000 /* Resources */,
+			);
+			dependencies = (
+			);
+			name = DevonthinkExtension;
+			packageProductDependencies = (
+				A1D101142000000100000000 /* TunaKit */,
+			);
+			productName = DevonthinkExtension;
+			productReference = A1D1010B2000000100000000 /* DevonthinkExtension.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		A2E202082000000100000000 /* QuickLookExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A2E2020C2000000100000000 /* Build configuration list for PBXNativeTarget "QuickLookExtension" */;
+			buildPhases = (
+				A2E202092000000100000000 /* Sources */,
+				A2E2020A2000000100000000 /* Frameworks */,
+				A2E2020B2000000100000000 /* Resources */,
+			);
+			dependencies = (
+			);
+			name = QuickLookExtension;
+			packageProductDependencies = (
+				A1D101142000000100000000 /* TunaKit */,
+			);
+			productName = QuickLookExtension;
+			productReference = A2E202042000000100000000 /* QuickLookExtension.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A1D101152000000100000000 /* Project object */ = {
+			isa = PBXProject;
+			autoCreateVariablesStyle = 1;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					A1D101102000000100000000 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = A1D101162000000100000000 /* Build configuration list for PBXProject "DevonthinkExtension" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = A1D101002000000100000000;
+			packageReferences = (
+				A1D101172000000100000000 /* XCRemoteSwiftPackageReference "TunaKit" */,
+			);
+			productRefGroup = A1D1010F2000000100000000 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A1D101102000000100000000 /* DevonthinkExtension */,
+				A2E202082000000100000000 /* QuickLookExtension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A1D101132000000100000000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2E2020B2000000100000000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A1D101122000000100000000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1D101012000000100000000 /* DevonthinkExtension.swift in Sources */,
+				A1D101032000000100000000 /* DevonthinkCatalog.swift in Sources */,
+				A1D101052000000100000000 /* DevonthinkItems.swift in Sources */,
+				A1D101072000000100000000 /* DevonthinkActionsCatalog.swift in Sources */,
+				A1D101092000000100000000 /* DevonthinkData.swift in Sources */,
+				A1D1010B2000000100000001 /* DEVONthinkBridge.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2E202092000000100000000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A2E202052000000100000000 /* QuickLookExtension.swift in Sources */,
+				A2E202062000000100000000 /* QuickLookActionsCatalog.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A1D101182000000100000000 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = DevonthinkExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tunaextensions.devonthink;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 6;
+			};
+			name = Debug;
+		};
+		A1D101192000000100000000 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = DevonthinkExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tunaextensions.devonthink;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 6;
+			};
+			name = Release;
+		};
+		A1D1011A200000100000000 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = DevonthinkExtension;
+			};
+			name = Debug;
+		};
+		A1D1011B200000100000000 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = DevonthinkExtension;
+			};
+			name = Release;
+		};
+		A2E2020D2000000100000000 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = QuickLookExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tunaextensions.quicklook;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 6;
+			};
+			name = Debug;
+		};
+		A2E2020E2000000100000000 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = QuickLookExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tunaextensions.quicklook;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 6;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A1D101162000000100000000 /* Build configuration list for PBXProject "DevonthinkExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1D1011A200000100000000 /* Debug */,
+				A1D1011B200000100000000 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1D101112000000100000000 /* Build configuration list for PBXNativeTarget "DevonthinkExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1D101182000000100000000 /* Debug */,
+				A1D101192000000100000000 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A2E2020C2000000100000000 /* Build configuration list for PBXNativeTarget "QuickLookExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A2E2020D2000000100000000 /* Debug */,
+				A2E2020E2000000100000000 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A1D101172000000100000000 /* XCRemoteSwiftPackageReference "TunaKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/tunaformac/TunaKit";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 1.14.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A1D101142000000100000000 /* TunaKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1D101172000000100000000 /* XCRemoteSwiftPackageReference "TunaKit" */;
+			productName = TunaKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+
+	};
+	rootObject = A1D101152000000100000000 /* Project object */;
+}
