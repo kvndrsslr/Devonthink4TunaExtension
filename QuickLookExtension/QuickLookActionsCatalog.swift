@@ -33,8 +33,7 @@ public final class QuickLookActionsCatalog: NSObject, ActionCatalog {
   private static func quickLookAction() -> CatalogAction {
     let action = PredicateAwareAction(
       id: QuickLookActionIDs.quickLook,
-      title: "Quick Look",
-      type: .action
+      title: "Quick Look"
     ) { subject, _ in
       guard let entity = subject as? CatalogEntity, let path = entity.path else {
         return .failure("Cannot Quick Look: no file path")

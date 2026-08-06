@@ -11,7 +11,7 @@ public final class QuickLookExtension: Extension {
         description: "Quick Look any file directly from Tuna.",
         iconName: "eye"
       ),
-      compatibility: ExtensionDeclarationCompatibility(minTuna: "0.80", minTunaKit: "1.14.0"),
+      compatibility: ExtensionDeclarationCompatibility(minTuna: "0.83", minTunaKit: "1.17.0"),
       actionCatalogs: [
         ActionCatalogDeclaration(
           id: "quicklook.actions",

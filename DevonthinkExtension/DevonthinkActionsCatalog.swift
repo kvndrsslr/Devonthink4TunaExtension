@@ -39,8 +39,7 @@ public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
   private static func openInDEVONthinkAction() -> CatalogAction {
     let action = PredicateAwareAction(
       id: DevonthinkActionIDs.openInDEVONthink,
-      title: "Open in DEVONthink",
-      type: .action
+      title: "Open in DEVONthink"
     ) { subject, _ in
       let uuid: String
       if let item = subject as? DevonthinkRecordItem {
@@ -64,8 +63,7 @@ public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
   private static func revealInDEVONthinkAction() -> CatalogAction {
     let action = PredicateAwareAction(
       id: DevonthinkActionIDs.revealInDEVONthink,
-      title: "Reveal in DEVONthink",
-      type: .action
+      title: "Reveal in DEVONthink"
     ) { subject, _ in
       let uuid: String
       if let item = subject as? DevonthinkRecordItem {
@@ -94,8 +92,7 @@ public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
   private static func copyItemLinkAction() -> CatalogAction {
     let action = PredicateAwareAction(
       id: DevonthinkActionIDs.copyItemLink,
-      title: "Copy Item Link",
-      type: .action
+      title: "Copy Item Link"
     ) { subject, _ in
       let uuid: String
       if let item = subject as? DevonthinkRecordItem {
@@ -119,8 +116,7 @@ public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
   private static func copyUUIDAction() -> CatalogAction {
     let action = PredicateAwareAction(
       id: DevonthinkActionIDs.copyUUID,
-      title: "Copy UUID",
-      type: .action
+      title: "Copy UUID"
     ) { subject, _ in
       let uuid: String
       if let item = subject as? DevonthinkRecordItem {
@@ -148,8 +144,7 @@ public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
   private static func createNoteAction() -> CatalogAction {
     let action = PredicateAwareAction(
       id: DevonthinkActionIDs.createNote,
-      title: "Capture to DEVONthink",
-      type: .action
+      title: "Capture to DEVONthink"
     ) { subject, _ in
       guard subject.typeID == .textSnippet else {
         return .failure("Select text first")
@@ -178,8 +173,7 @@ public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
   private static func createNoteFromAppAction() -> CatalogAction {
     let action = PredicateAwareAction(
       id: DevonthinkActionIDs.createNoteFromApp,
-      title: "Capture to DEVONthink",
-      type: .action
+      title: "Capture to DEVONthink"
     ) { _, target in
       guard let body = target?.textValueFallback() else {
         return .failure("Missing note text")

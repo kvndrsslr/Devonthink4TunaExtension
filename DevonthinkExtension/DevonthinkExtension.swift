@@ -11,7 +11,7 @@ public final class DevonthinkExtension: Extension {
         description: "Search DEVONthink 4 documents, capture notes, and open them in DEVONthink or with the default app.",
         iconName: "books.vertical"
       ),
-      compatibility: ExtensionDeclarationCompatibility(minTuna: "0.80", minTunaKit: "1.14.0"),
+      compatibility: ExtensionDeclarationCompatibility(minTuna: "0.83", minTunaKit: "1.17.0"),
       catalogs: [
         CatalogDeclaration(
           id: "devonthink.search",
