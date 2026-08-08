@@ -43,6 +43,13 @@ struct DevonthinkDatabase: Hashable, Sendable {
   let name: String
   let uuid: String
   let path: String?
+  /// True when this database is DEVONthink's Global Inbox. Capture must always
+  /// target this database (guaranteed inbox), never whichever database happens
+  /// to be current in DEVONthink's UI.
+  let isInbox: Bool
+  /// UUID of this database's Inbox group (its `incomingGroup`), used to pin
+  /// record creation to the inbox explicitly.
+  let incomingGroupUUID: String?
 }
 
 enum DevonthinkDataError: Error, LocalizedError, Sendable {
@@ -248,7 +255,17 @@ enum DevonthinkData {
       for db in array {
         guard let name = db["name"] as? String, !name.isEmpty,
               let uuid = db["uuid"] as? String, !uuid.isEmpty else { continue }
-        databases.append(DevonthinkDatabase(name: name, uuid: uuid, path: nil))
+        // `is_inbox` can arrive as a JSON boolean or a string.
+        let isInbox: Bool
+        if let b = db["is_inbox"] as? Bool {
+          isInbox = b
+        } else {
+          isInbox = (db["is_inbox"] as? String) == "true"
+        }
+        databases.append(DevonthinkDatabase(
+          name: name, uuid: uuid, path: nil,
+          isInbox: isInbox,
+          incomingGroupUUID: db["incomingGroupUUID"] as? String))
       }
     }
     return .success(databases)
@@ -357,15 +374,39 @@ enum DevonthinkData {
 
   // MARK: - Create records via MCP
 
+  /// Resolve DEVONthink's Global Inbox database and its Inbox group. Capture
+  /// must always land there — never in whatever database is currently active in
+  /// DEVONthink's UI. Returns `.failure` if no Global Inbox database is loaded.
+  private static func globalInbox() async -> (databaseUUID: String, inboxGroupUUID: String)? {
+    switch await loadedDatabases() {
+    case .success(let databases):
+      guard let inbox = databases.first(where: { $0.isInbox }) else { return nil }
+      // The Global Inbox's Inbox group falls back to the database UUID when the
+      // group is the database root (as is the case for the Global Inbox).
+      return (inbox.uuid, inbox.incomingGroupUUID ?? inbox.uuid)
+    case .failure:
+      return nil
+    }
+  }
+
   /// Create a new plain-text record in DEVONthink via the MCP `create_record`
   /// tool. Unlike the old `x-devonthink://createText` URL scheme, this goes
   /// through DEVONthink's own server, which guarantees the text lands in the
   /// correct field regardless of special characters.
+  ///
+  /// The record is always placed in the **Global Inbox** database's Inbox group
+  /// (`database_uuid` + `destination`), so a capture can never be routed to
+  /// whichever database happens to be current in DEVONthink.
   static func createText(title: String, text: String) async -> Result<Void, DevonthinkDataError> {
+    guard let inbox = await globalInbox() else {
+      return .failure(.scriptFailed("DEVONthink Global Inbox could not be resolved."))
+    }
     let result = await DevonthinkMCP.call(tool: "create_record", arguments: [
       "name": title,
       "type": "text",
       "content": text,
+      "database_uuid": inbox.databaseUUID,
+      "destination": inbox.inboxGroupUUID,
     ])
     guard result.success else { return .failure(selfFailureMessage(result)) }
     return .success(())
