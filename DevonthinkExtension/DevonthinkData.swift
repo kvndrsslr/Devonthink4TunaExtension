@@ -325,11 +325,16 @@ enum DevonthinkData {
 
   /// Create a new plain text document in DEVONthink via the
   /// `x-devonthink://createText` URL scheme. Fire-and-forget.
+  ///
+  /// Query values are percent-encoded with a character set that *excludes* the
+  /// query-string delimiters (`&`, `=`) plus characters DEVONthink's URL parser
+  /// treats specially (`+` decodes to space, `?`/`#` can terminate the value,
+  /// `/` is a path separator). `.urlQueryAllowed` alone is NOT safe here — it
+  /// leaves `&`/`=`/`+`/`?` raw, so any captured text containing them corrupts
+  /// the `title`/`text` parameters and the note silently fails to create.
   static func createText(title: String, text: String) -> Result<Void, DevonthinkDataError> {
-    guard let encTitle = title.addingPercentEncoding(
-            withAllowedCharacters: .urlQueryAllowed),
-          let encText = text.addingPercentEncoding(
-            withAllowedCharacters: .urlQueryAllowed),
+    guard let encTitle = urlEncodeForQuery(title),
+          let encText = urlEncodeForQuery(text),
           let url = URL(string: "x-devonthink://createText?title=\(encTitle)&text=\(encText)&noselector=1") else {
       return .failure(.scriptFailed("Could not build createText URL"))
     }
@@ -337,6 +342,16 @@ enum DevonthinkData {
       return .failure(.scriptFailed("DEVONthink could not open the create-text URL"))
     }
     return .success(())
+  }
+
+  /// Percent-encode a value for insertion into a DEVONthink URL-command query
+  /// string. Uses `.urlQueryAllowed` minus the characters that would corrupt
+  /// query parsing (`&`, `=`, `+`, `?`, `#`, `/`), so the encoded value round
+  /// trips exactly in DEVONthink.
+  private static func urlEncodeForQuery(_ value: String) -> String? {
+    var allowed = CharacterSet.urlQueryAllowed
+    allowed.remove(charactersIn: "&=+?#;/")
+    return value.addingPercentEncoding(withAllowedCharacters: allowed)
   }
 
   /// Create a new note in DEVONthink from arbitrary text. Derives the title
