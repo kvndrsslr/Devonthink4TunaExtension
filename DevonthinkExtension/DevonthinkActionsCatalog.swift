@@ -204,15 +204,13 @@ public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
   /// DEVONthink app).
   ///
   /// The search view is opened by conforming the action to
-  /// `SubjectScopedSearchActionProviding` (see the extension below); the
-  /// callback is a no-op fallback so nothing is shelved.
+  /// `SubjectScopedSearchActionProviding`; the callback is a no-op fallback so
+  /// nothing is shelved.
   private static func searchInDEVONthinkAction() -> CatalogAction {
-    let action = PredicateAwareAction(
+    let action = DevonthinkSearchAction(
       id: DevonthinkActionIDs.searchInDEVONthink,
       title: "Search in DEVONthink"
-    ) { _, _ in
-      .success
-    }
+    )
     action.systemSymbolName = "magnifyingglass"
     action.supportedSubjectTypes = [.textSnippet]
     action.subjectPredicate = { subject in
@@ -225,24 +223,34 @@ public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
 
 // MARK: - Search-view routing
 
-/// Retrofitted conformance: when a `PredicateAwareAction` is the chosen result
-/// for a subject, Tuna asks it how to open the scoped-search view. Only the
-/// "Search in DEVONthink" action participates (a text snippet subject whose
-/// text becomes the prefilled query); every other action returns nil so its
-/// normal callback behavior is unchanged.
-extension PredicateAwareAction: SubjectScopedSearchActionProviding {
-  public var subjectScopedSearchRootCatalogIdentifier: String? {
-    id == DevonthinkActionIDs.searchInDEVONthink ? "devonthink.databases" : nil
+/// The "Search in DEVONthink" action.
+///
+/// A dedicated `CatalogAction` subclass — NOT a retroactive conformance on the
+/// shared `PredicateAwareAction` base class. Adding
+/// `extension PredicateAwareAction: SubjectScopedSearchActionProviding` makes
+/// **every** `PredicateAwareAction` in the process (Tuna's own common actions
+/// and every other extension's actions) advertise itself as a scoped-search
+/// provider, which breaks Tuna's Combo Mode action routing with
+/// "Missing search query" errors. Confining the conformance to this one class
+/// (mirroring BrewExtension's `SubjectTextSearchAction`) leaves other actions
+/// untouched.
+private final class DevonthinkSearchAction: CatalogAction, ActionPredicateProviding,
+  SubjectScopedSearchActionProviding, @unchecked Sendable
+{
+  var subjectPredicate: CatalogActionSubjectPredicate?
+  var targetPredicate: CatalogActionTargetPredicate?
+  var subjectScopedSearchRootCatalogIdentifier: String? { "devonthink.databases" }
+
+  init(id: String, title: String) {
+    super.init(id: id, title: title) { _, _ in .success }
   }
 
-  public func subjectScopedSearchQuery(from subject: CatalogItem) -> String? {
-    guard id == DevonthinkActionIDs.searchInDEVONthink else { return nil }
-    return subject.textValueFallback()?.trimmingCharacters(in: .whitespacesAndNewlines)
+  func subjectScopedSearchQuery(from subject: CatalogItem) -> String? {
+    subject.textValueFallback()?.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
-  public func subjectScopedSearchRoot(for subject: CatalogItem) -> CatalogItem? {
-    guard id == DevonthinkActionIDs.searchInDEVONthink else { return nil }
-    return DevonthinkSearchEntryItem(catalogIdentifier: "devonthink.databases")
+  func subjectScopedSearchRoot(for _: CatalogItem) -> CatalogItem? {
+    DevonthinkSearchEntryItem(catalogIdentifier: "devonthink.databases")
   }
 }
 
