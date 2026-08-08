@@ -32,9 +32,7 @@ public final class DevonthinkExtension: Extension {
               label: "Search Comparison",
               defaultValue: "0",
               description: "Search comparison mode: 0=contains, 1=begins with, 2=ends with, 3=equals, 4=wildcard, 5=fuzzy, 6=boolean."
-            ),
-            DevonthinkSettings.autoLaunchSettingDefinition,
-            DevonthinkSettings.rawAESettingDefinition
+            )
           ])
       ],
       actionCatalogs: [

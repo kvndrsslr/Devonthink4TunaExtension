@@ -13,8 +13,7 @@
 		A1D101072000000100000000 /* DevonthinkActionsCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D101082000000100000000 /* DevonthinkActionsCatalog.swift */; };
 		A1D101092000000100000000 /* DevonthinkData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D1010A2000000100000000 /* DevonthinkData.swift */; };
 		A1D1010B2000000100000001 /* DEVONthinkBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D1010C2000000100000001 /* DEVONthinkBridge.swift */; };
-		A3D1010A2000000100000000 /* DevonthinkAESearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3D1010A2000000100000001 /* DevonthinkAESearch.swift */; };
-		A4D1010B2000000100000000 /* DevonthinkAEBrowse.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D1010B2000000100000001 /* DevonthinkAEBrowse.swift */; };
+		A5D1010C2000000100000000 /* DevonthinkMCP.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5D1010C2000000100000001 /* DevonthinkMCP.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,8 +25,7 @@
 		A1D1010A2000000100000000 /* DevonthinkData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevonthinkData.swift; sourceTree = "<group>"; };
 		A1D1010C2000000100000000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1D1010C2000000100000001 /* DEVONthinkBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DEVONthinkBridge.swift; sourceTree = "<group>"; };
-		A3D1010A2000000100000001 /* DevonthinkAESearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevonthinkAESearch.swift; sourceTree = "<group>"; };
-		A4D1010B2000000100000001 /* DevonthinkAEBrowse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevonthinkAEBrowse.swift; sourceTree = "<group>"; };
+		A5D1010C2000000100000001 /* DevonthinkMCP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevonthinkMCP.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,8 +56,7 @@
 				A1D101082000000100000000 /* DevonthinkActionsCatalog.swift */,
 				A1D1010A2000000100000000 /* DevonthinkData.swift */,
 				A1D1010C2000000100000001 /* DEVONthinkBridge.swift */,
-				A3D1010A2000000100000001 /* DevonthinkAESearch.swift */,
-				A4D1010B2000000100000001 /* DevonthinkAEBrowse.swift */,
+				A5D1010C2000000100000001 /* DevonthinkMCP.swift */,
 				A1D1010C2000000100000000 /* Info.plist */,
 			);
 			path = DevonthinkExtension;
@@ -150,8 +147,7 @@
 				A1D101072000000100000000 /* DevonthinkActionsCatalog.swift in Sources */,
 				A1D101092000000100000000 /* DevonthinkData.swift in Sources */,
 				A1D1010B2000000100000001 /* DEVONthinkBridge.swift in Sources */,
-				A3D1010A2000000100000000 /* DevonthinkAESearch.swift in Sources */,
-				A4D1010B2000000100000000 /* DevonthinkAEBrowse.swift in Sources */,
+				A5D1010C2000000100000000 /* DevonthinkMCP.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

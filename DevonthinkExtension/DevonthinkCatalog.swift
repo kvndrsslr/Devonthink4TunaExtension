@@ -54,8 +54,6 @@ enum DevonthinkSettings {
   static let pageSizeDefault = "7"
   static let searchComparisonKey = "SearchComparison"
   static let searchComparisonDefault = "0"
-  static let autoLaunchKey = "AutoLaunchDevonthink"
-  static let autoLaunchDefault = true
 
   static var pageSize: Int {
     let store = CatalogSettingStore(catalogIdentifier: "devonthink.databases")
@@ -69,57 +67,5 @@ enum DevonthinkSettings {
     let raw = store.stringValue(for: searchComparisonKey, defaultValue: searchComparisonDefault)
     let value = Int(raw) ?? Int(searchComparisonDefault) ?? 0
     return max(0, min(value, 6))
-  }
-
-  /// When enabled, DEVONthink is launched in the background (without stealing
-  /// focus) the moment the user enters the DEVONthink search context, and the
-  /// extension waits for it to be ready to answer Apple Events before running
-  /// the first search. When disabled, DEVONthink must already be running for
-  /// search to work; otherwise an actionable "not running" item is shown.
-  static var autoLaunchDevonthink: Bool {
-    let store = CatalogSettingStore(catalogIdentifier: "devonthink.databases")
-    return store.boolValue(for: autoLaunchSetting)
-  }
-
-  /// Lazily-constructed `CatalogSettingDefinition` so the catalog declaration
-  /// and the typed accessor share one source of truth for key/default/label.
-  private static let autoLaunchSetting = CatalogSettingDefinition(
-    key: autoLaunchKey,
-    type: .bool,
-    label: "Auto-launch DEVONthink",
-    defaultValue: autoLaunchDefault ? "1" : "0",
-    description: "Launch DEVONthink in the background and wait for it to be ready when entering the search. Turn off to require DEVONthink to already be running.")
-
-  /// The setting definition surfaced to Tuna for the auto-launch preference.
-  static var autoLaunchSettingDefinition: CatalogSettingDefinition {
-    autoLaunchSetting
-  }
-
-  // MARK: - Search transport (osascript vs raw in-process Apple Events)
-
-  enum SearchTransport {
-    case osascript
-    case rawAppleEvents
-  }
-
-  static let useRawAECKey = "UseRawAppleEvents"
-
-  /// Which engine drives search. Defaults to `.osascript` (the production,
-  /// subprocess-isolated path). `.rawAppleEvents` enables the in-process AE
-  /// engine for A/B performance comparison; it is opt-in.
-  static var searchTransport: SearchTransport {
-    let store = CatalogSettingStore(catalogIdentifier: "devonthink.databases")
-    return store.boolValue(for: rawAESetting) ? .rawAppleEvents : .osascript
-  }
-
-  private static let rawAESetting = CatalogSettingDefinition(
-    key: useRawAECKey,
-    type: .bool,
-    label: "Use in-process Apple Events (A/B test)",
-    defaultValue: "0",
-    description: "Search DEVONthink with raw in-process Apple Events instead of an osascript subprocess. Faster (no spawn/compile, bulk record fetch) but an experimental alternative — flip this to compare.")
-
-  static var rawAESettingDefinition: CatalogSettingDefinition {
-    rawAESetting
   }
 }

@@ -25,14 +25,15 @@ struct DevonthinkRecord: Hashable, Sendable {
 }
 
 /// A loaded DEVONthink database (top-level container served by the browse
-/// catalog). `name` matches the database's AppleScript `name`; `uuid` is the
-/// database's stable record UUID (used to enumerate root contents via the same
-/// `children of` path as groups, which is the reliable enumeration form);
-/// `path` is the `.dtBase2` bundle path (the item's stable identity for Tuna).
+/// catalog). `name` matches DEVONthink's database name; `uuid` is the database's
+/// stable record UUID (used to enumerate root contents via the same
+/// `get_record_children` path used for groups). `path` is the `.dtBase2` bundle
+/// path when known — the MCP `get_databases` brief does not include it, so it is
+/// nil in practice (the database item identifies itself by UUID instead).
 struct DevonthinkDatabase: Hashable, Sendable {
   let name: String
   let uuid: String
-  let path: String
+  let path: String?
 }
 
 enum DevonthinkDataError: Error, LocalizedError, Sendable {
@@ -43,7 +44,7 @@ enum DevonthinkDataError: Error, LocalizedError, Sendable {
   var errorDescription: String? {
     switch self {
     case .devonthinkNotRunning:
-      return "DEVONthink is not running. Open DEVONthink to search its databases."
+      return "DEVONthink could not be reached. Open DEVONthink and try again."
     case .scriptFailed(let message):
       return "DEVONthink query failed: \(message)"
     case .noResults:
@@ -52,17 +53,14 @@ enum DevonthinkDataError: Error, LocalizedError, Sendable {
   }
 }
 
-/// Bridge to DEVONthink 4 — **no ScriptingBridge**.
+/// Data access to DEVONthink 4 via its bundled MCP stdio server.
 ///
-/// Every Apple Event runs in a disposable `/usr/bin/osascript` child process.
-/// ScriptingBridge crashes with `EXC_BAD_ACCESS` inside
-/// `-[SBAppContext descriptorForObject:]` — a raw segfault Swift cannot catch.
-/// A child process can crash without harming Tuna, so the extension can never
-/// take the host down: a failed/aborted `osascript` simply yields no results.
-///
-/// The search AppleScript emits one tab-delimited line per record plus a
-/// trailing `COUNT:<total>` line; the last page slice is requested in-process
-/// by indexing into the full result set returned by DEVONthink's `search`.
+/// Every query runs through `DevonthinkMCP`, a persistent JSON-RPC client to
+/// DEVONthink's own MCP server (spawned in a child process with `--stdio`).
+/// The server talks to a running DEVONthink and auto-launches it on demand, so
+/// the extension never has to launch or await DEVONthink itself. Running in a
+/// child process keeps Tuna safe: a crashed or hung server — or DEVONthink
+/// itself — affects only that child, never the extension host.
 enum DevonthinkData {
 
   // MARK: - Search (paged)
@@ -71,201 +69,106 @@ enum DevonthinkData {
   static let pageSize = 3
 
   /// Search and return one page of results. Page 0 is the first `pageSize`
-  /// records. If DEVONthink is not running, returns `.failure(.devonthinkNotRunning)`
-  /// immediately — the caller shows an actionable item so the user can launch
-  /// DEVONthink and re-run the search. We never auto-launch DT from the search
-  /// path (only from the unavailable item's action).
+  /// records. Searches run through the DEVONthink MCP server, which auto-launches
+  /// DEVONthink on demand, so no liveness pre-check is needed — the call itself
+  /// reports failure if DEVONthink can't be reached.
   static func searchPage(query: String, page: Int, pageSize: Int = DevonthinkData.pageSize) async -> Result<(records: [DevonthinkRecord], hasMore: Bool), DevonthinkDataError> {
     let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !normalized.isEmpty else { return .success(([], false)) }
 
-    guard DEVONthinkBridge.isRunning() else {
-      return .failure(.devonthinkNotRunning)
+    // Tuna pages are 1-indexed; MCP offsets are 0-based.
+    let offset = max(0, (page - 1) * pageSize)
+    let result = await DevonthinkMCP.call(tool: "search_records", arguments: [
+      "query": normalized,
+      "limit": pageSize,
+      "offset": offset,
+    ])
+
+    guard result.success, let payload = result.dict else {
+      return .failure(selfFailureMessage(result))
     }
 
-    let result = await Task.detached(priority: .userInitiated) {
-      switch DevonthinkSettings.searchTransport {
-      case .osascript:
-        return Self.searchViaOSA(query: normalized, page: page, pageSize: pageSize)
-      case .rawAppleEvents:
-        return Self.searchViaAE(query: normalized, page: page, pageSize: pageSize)
-      }
-    }.value
-
-    switch result {
-    case .success(let (records, hasMore)):
-      return .success((records, hasMore))
-    case .failure(let error):
-      return .failure(error)
-    }
-  }
-
-  // MARK: - osascript search
-
-  /// Run the DEVONthink `search` command in a child `osascript` process and
-  /// parse the tab-delimited output. The AppleScript runs the search once,
-  /// fetches `properties` for just the requested page slice (one Apple Event
-  /// per record), and returns `COUNT:<total>` so we know whether more pages
-  /// remain.
-  ///
-  /// Runs in a subprocess: if DEVONthink quits mid-query or its scripting
-  /// system misbehaves, only `osascript` dies — Tuna is unaffected.
-  private static func searchViaOSA(query: String, page: Int, pageSize: Int) -> Result<([DevonthinkRecord], Bool), DevonthinkDataError> {
-    // Re-check liveness right before spawning — the process may have quit
-    // between the caller's check and now.
-    guard DEVONthinkBridge.isRunning() else {
-      return .failure(.devonthinkNotRunning)
-    }
-
-    // TunaKit passes 1-indexed pages (page 1 = first results), matching the
-    // original working commit's convention. Convert to AppleScript's 1-indexed
-    // `repeat with i from start to end`: page 1 → indices 1..pageSize.
-    let start = ((page - 1) * pageSize) + 1
-    let script = Self.searchScript(query: query, start: start, pageSize: pageSize)
-
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-    process.arguments = ["-e", script]
-
-    let pipe = Pipe()
-    process.standardOutput = pipe
-    process.standardError = pipe
-
-    do {
-      try process.run()
-    } catch {
-      return .failure(.scriptFailed("Could not start osascript: \(error.localizedDescription)"))
-    }
-
-    // Bound the wait so a hung osascript can't wedge the search forever.
-    let timeout = DispatchTime.now() + .seconds(8)
-    while process.isRunning {
-      if DispatchTime.now() >= timeout {
-        process.terminate()
-        return .failure(.scriptFailed("DEVONthink search timed out"))
-      }
-      Thread.sleep(forTimeInterval: 0.01)
-    }
-
-    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-    let output = String(data: data, encoding: .utf8) ?? ""
-
-    // Non-zero exit or empty output = failure (DT quit, scripting error, etc.).
-    // Never a crash — the subprocess absorbed it.
-    guard process.terminationStatus == 0, !output.isEmpty else {
-      return .failure(.devonthinkNotRunning)
-    }
-
-    return Self.parseSearchOutput(output, page: page, pageSize: pageSize)
-  }
-
-  /// Raw-AE search engine (see `DevonthinkAESearch`). Paged: returns one page of
-  /// records with `hasMore`. Used when `DevonthinkSettings.searchTransport ==
-  /// .rawAppleEvents` for A/B comparison against `searchViaOSA`.
-  private static func searchViaAE(query: String, page: Int, pageSize: Int) -> Result<([DevonthinkRecord], Bool), DevonthinkDataError> {
-    // Re-check liveness right before — the process may have quit between the
-    // caller's check and now.
-    guard DEVONthinkBridge.isRunning() else {
-      return .failure(.devonthinkNotRunning)
-    }
-    return DevonthinkAESearch.search(query: query, page: page, pageSize: pageSize)
-  }
-
-  /// AppleScript source: search DT, emit one tab-delimited line per record in
-  /// the requested page slice, then a `COUNT:<total>` line. Field values are
-  /// sanitized (tabs/newlines stripped) so delimiters stay unambiguous.
-  private static func searchScript(query: String, start: Int, pageSize: Int) -> String {
-    // Escape backslashes and double quotes for AppleScript string literals,
-    // and strip tabs/newlines so record values can't break the delimited format.
-    let escapedQuery = query
-      .replacingOccurrences(of: "\\", with: "\\\\")
-      .replacingOccurrences(of: "\"", with: "\\\"")
-      .replacingOccurrences(of: "\t", with: " ")
-      .replacingOccurrences(of: "\n", with: " ")
-      .replacingOccurrences(of: "\r", with: " ")
-
-    let end = start + pageSize - 1
-    // Build the AppleScript source as joined Swift lines. The literal newline
-    // in the per-record line is expressed as "\n" (a Swift string escape), so
-    // the source compiles and the emitted script contains a real newline char.
-    let lines = [
-      "on clean(s)",
-      "    set s to s as string",
-      "    set tid to AppleScript's text item delimiters",
-      "    set AppleScript's text item delimiters to \"\t\"",
-      "    set s to text items of s",
-      "    set AppleScript's text item delimiters to \" \"",
-      "    set s to s as string",
-      "    set AppleScript's text item delimiters to tid",
-      "    return s",
-      "end clean",
-      "",
-      "set theResults to {}",
-      "set theCount to 0",
-      "try",
-      "    tell application id \"com.devon-technologies.think\"",
-      "        set theResults to search \"\(escapedQuery)\"",
-      "        set theCount to count of theResults",
-      "    end tell",
-      "end try",
-      "",
-      "set endIdx to \(end)",
-      "if endIdx > theCount then set endIdx to theCount",
-      "",
-      "set out to \"\"",
-      "if theCount > 0 and \(start) \u{2264} theCount then",
-      "    repeat with i from \(start) to endIdx",
-      "        set aRec to item i of theResults",
-      "        tell application id \"com.devon-technologies.think\"",
-      "            set recProps to properties of aRec",
-      "            set recUUID to my clean(uuid of recProps)",
-      "            set recName to my clean(name of recProps)",
-      "            set recPath to my clean(path of recProps)",
-      "            set recLoc to my clean(location of recProps)",
-      "            set recKind to my clean(kind of recProps)",
-      "        end tell",
-      "        set out to out & recUUID & \"\t\" & recName & \"\t\" & recPath & \"\t\" & recLoc & \"\t\" & recKind & \"\n\"",
-      "    end repeat",
-      "end if",
-      "return out & \"COUNT:\" & theCount"
-    ]
-    return lines.joined(separator: "\n")
-  }
-
-  /// Parse tab-delimited osascript output into records + `hasMore`.
-  private static func parseSearchOutput(_ output: String, page: Int, pageSize: Int) -> Result<([DevonthinkRecord], Bool), DevonthinkDataError> {
-    var records: [DevonthinkRecord] = []
-    var totalCount = 0
-
-    for rawLine in output.split(separator: "\n", omittingEmptySubsequences: true) {
-      let line = String(rawLine)
-      if line.hasPrefix("COUNT:") {
-        totalCount = Int(line.dropFirst("COUNT:".count)) ?? 0
-        continue
-      }
-      let fields = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
-      guard fields.count >= 5 else { continue }
-      let uuid = fields[0]
-      guard !uuid.isEmpty else { continue }
-      let name = fields[1]
-      let rawPath = fields[2]
-      let rawLoc = fields[3]
-      let kind = fields[4]
-
-      records.append(
-        DevonthinkRecord(
-          uuid: uuid,
-          name: name.isEmpty ? "Untitled" : name,
-          path: cleanedOptional(rawPath),
-          location: cleanedOptional(rawLoc),
-          databaseName: databaseName(from: rawPath),
-          kind: cleanedOptional(kind)))
-    }
-
-    // 1-indexed pages: page N covers records [(N-1)*pageSize, N*pageSize).
+    let records = parseSearchResults(payload)
+    let total = payload["total"] as? Int ?? records.count
     let sliceEnd = ((page - 1) * pageSize) + pageSize
-    let hasMore = sliceEnd < totalCount
+    let hasMore = sliceEnd < total
     return .success((records, hasMore))
+  }
+
+  // MARK: - MCP search parsing
+
+  /// Map an MCP `search_records` payload (`{results:[...], total, offset, limit}`)
+  /// into `DevonthinkRecord`s. The brief hit shape is `{uuid, name, type, kind,
+  /// location, databaseName, databaseUUID, tags, tagCount, additionDate,
+  /// modificationDate, score, doi, isbn, indexed}` — there is no filesystem
+  /// `path` in the brief, so `path` is nil and `location`/`databaseName` come
+  /// straight from the brief.
+  private static func parseSearchResults(_ payload: [String: Any]) -> [DevonthinkRecord] {
+    guard let results = payload["results"] as? [[String: Any]] else { return [] }
+    return results.compactMap { record(fromBrief: $0) }
+  }
+
+  /// Build a `DevonthinkRecord` from an MCP record brief dict.
+  static func record(fromBrief brief: [String: Any]) -> DevonthinkRecord? {
+    guard let uuid = brief["uuid"] as? String, !uuid.isEmpty else { return nil }
+    let name = (brief["name"] as? String) ?? ""
+    let location = cleanedOptional(brief["location"] as? String)
+    let databaseName = cleanedOptional(brief["databaseName"] as? String)
+    let kind = cleanedOptional(brief["kind"] as? String)
+    return DevonthinkRecord(
+      uuid: uuid,
+      name: name.isEmpty ? "Untitled" : name,
+      path: nil, // MCP briefs carry no filesystem path
+      location: location,
+      databaseName: databaseName,
+      kind: kind)
+  }
+
+  /// Map an MCP failure `CallResult` onto a `DevonthinkDataError`.
+  private static func selfFailureMessage(_ result: DevonthinkMCP.CallResult) -> DevonthinkDataError {
+    if let message = result.errorMessage, !message.isEmpty {
+      return .scriptFailed(message)
+    }
+    return .devonthinkNotRunning
+  }
+
+  // MARK: - Databases (browse root)
+
+  /// List the currently loaded DEVONthink databases via `get_databases`. MCP
+  /// returns `{name, uuid, rootUUID, ...}` — no filesystem path.
+  static func loadedDatabases() async -> Result<[DevonthinkDatabase], DevonthinkDataError> {
+    let result = await DevonthinkMCP.call(tool: "get_databases", arguments: [:])
+    guard result.success else {
+      return .failure(selfFailureMessage(result))
+    }
+    // get_databases returns a bare array of database dicts.
+    var databases: [DevonthinkDatabase] = []
+    if let array = result.array {
+      for db in array {
+        guard let name = db["name"] as? String, !name.isEmpty,
+              let uuid = db["uuid"] as? String, !uuid.isEmpty else { continue }
+        databases.append(DevonthinkDatabase(name: name, uuid: uuid, path: nil))
+      }
+    }
+    return .success(databases)
+  }
+
+  // MARK: - Children (browse into database/group)
+
+  /// Return the immediate children of a database or group (by UUID) via
+  /// `get_record_children`. Brief hits map identically to search results.
+  static func children(of uuid: String) async -> Result<[DevonthinkRecord], DevonthinkDataError> {
+    let result = await DevonthinkMCP.call(tool: "get_record_children", arguments: [
+      "uuid": uuid,
+      "limit": 1000,
+    ])
+    guard result.success, let payload = result.dict else {
+      return .failure(selfFailureMessage(result))
+    }
+    guard let items = payload["items"] as? [[String: Any]], !items.isEmpty else {
+      return .failure(.noResults)
+    }
+    return .success(items.compactMap { record(fromBrief: $0) })
   }
 
   // MARK: - Open / Reveal in DEVONthink (URL scheme, fire-and-forget)
@@ -321,37 +224,30 @@ enum DevonthinkData {
     return .success(())
   }
 
-  // MARK: - Create records via URL scheme
+  // MARK: - Create records via MCP
 
-  /// Create a new plain text document in DEVONthink via the
-  /// `x-devonthink://createText` URL scheme. Fire-and-forget.
-  ///
-  /// Query values are percent-encoded with a character set that *excludes* the
-  /// query-string delimiters (`&`, `=`) plus characters DEVONthink's URL parser
-  /// treats specially (`+` decodes to space, `?`/`#` can terminate the value,
-  /// `/` is a path separator). `.urlQueryAllowed` alone is NOT safe here — it
-  /// leaves `&`/`=`/`+`/`?` raw, so any captured text containing them corrupts
-  /// the `title`/`text` parameters and the note silently fails to create.
+  /// Create a new plain-text record in DEVONthink via the MCP `create_record`
+  /// tool. Unlike the old `x-devonthink://createText` URL scheme, this goes
+  /// through DEVONthink's own server, which guarantees the text lands in the
+  /// correct field regardless of special characters.
   static func createText(title: String, text: String) -> Result<Void, DevonthinkDataError> {
-    guard let encTitle = urlEncodeForQuery(title),
-          let encText = urlEncodeForQuery(text),
-          let url = URL(string: "x-devonthink://createText?title=\(encTitle)&text=\(encText)&noselector=1") else {
-      return .failure(.scriptFailed("Could not build createText URL"))
+    let semaphore = DispatchSemaphore(value: 0)
+    var outcome: Result<Void, DevonthinkDataError> = .failure(.scriptFailed("Create did not complete"))
+    Task.detached(priority: .userInitiated) {
+      let result = await DevonthinkMCP.call(tool: "create_record", arguments: [
+        "name": title,
+        "type": "text",
+        "content": text,
+      ])
+      if result.success {
+        outcome = .success(())
+      } else {
+        outcome = .failure(selfFailureMessage(result))
+      }
+      semaphore.signal()
     }
-    guard NSWorkspace.shared.open(url) else {
-      return .failure(.scriptFailed("DEVONthink could not open the create-text URL"))
-    }
-    return .success(())
-  }
-
-  /// Percent-encode a value for insertion into a DEVONthink URL-command query
-  /// string. Uses `.urlQueryAllowed` minus the characters that would corrupt
-  /// query parsing (`&`, `=`, `+`, `?`, `#`, `/`), so the encoded value round
-  /// trips exactly in DEVONthink.
-  private static func urlEncodeForQuery(_ value: String) -> String? {
-    var allowed = CharacterSet.urlQueryAllowed
-    allowed.remove(charactersIn: "&=+?#;/")
-    return value.addingPercentEncoding(withAllowedCharacters: allowed)
+    semaphore.wait()
+    return outcome
   }
 
   /// Create a new note in DEVONthink from arbitrary text. Derives the title
@@ -367,28 +263,9 @@ enum DevonthinkData {
 
   // MARK: - Helpers
 
-  /// Derive the database name from a record's filesystem path.
-  /// DT4 stores files under `~/Databases/<Database Name>.dtBase2/Files.noindex/...`
-  static func databaseName(from path: String?) -> String? {
-    guard let path = path?.trimmingCharacters(in: .whitespacesAndNewlines),
-          !path.isEmpty else { return nil }
-
-    let components = path.split(separator: "/")
-    for component in components {
-      let str = String(component)
-      if str.hasSuffix(".dtBase2") {
-        let dbName = str.replacingOccurrences(of: ".dtBase2", with: "")
-        return dbName.isEmpty ? nil : dbName
-      }
-    }
-    return nil
-  }
-
   private static func cleanedOptional(_ value: String?) -> String? {
     guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
     if trimmed.isEmpty { return nil }
     return trimmed
   }
-
-  private static let bundleID = DEVONthinkBridge.bundleID
 }

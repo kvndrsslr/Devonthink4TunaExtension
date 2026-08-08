@@ -59,22 +59,6 @@ final class DevonthinkSearchEntryItem: CatalogEntity, ActionFilteringProviding,
     let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return ScopedSearchPage(items: [], hasMore: false) }
 
-    // Ensure DEVONthink is up and answering Apple Events before searching.
-    // With auto-launch on, this launches DT in the background and waits for
-    // readiness; with it off, it only waits if DT is already running and
-    // returns the unavailable item immediately otherwise.
-    let autoLaunch = DevonthinkSettings.autoLaunchDevonthink
-    let ready = await DEVONthinkBridge.ensureReady(autoLaunch: autoLaunch)
-    guard ready else {
-      return ScopedSearchPage(items: [
-        CatalogMessageItem(
-          title: "DEVONthink Not Running",
-          message: "DEVONthink must be running to search its databases.",
-          symbolName: "exclamationmark.triangle",
-          tintColor: .systemOrange)
-      ], hasMore: false)
-    }
-
     switch await DevonthinkData.searchPage(query: trimmed, page: page, pageSize: DevonthinkSettings.pageSize) {
     case .success(let (records, hasMore)):
       return ScopedSearchPage(
@@ -85,7 +69,7 @@ final class DevonthinkSearchEntryItem: CatalogEntity, ActionFilteringProviding,
       return ScopedSearchPage(items: [
         CatalogMessageItem(
           title: "DEVONthink Unavailable",
-          message: "Could not search DEVONthink. It may have quit or be unresponsive.",
+          message: "Could not search DEVONthink. It may not be reachable.",
           symbolName: "exclamationmark.triangle",
           tintColor: .systemOrange)
       ], hasMore: false)
@@ -107,21 +91,9 @@ final class DevonthinkBrowseEntryItem: CatalogEntity, CatalogHierarchyNode, @unc
       catalogIdentifier: catalogIdentifier,
       emptyMessage: "No DEVONthink databases are loaded."
     ) {
-      // Start DEVONthink the same way the search path does: with auto-launch
-      // on, launch it in the background and wait for readiness; with it off,
-      // only wait if it's already running and surface a not-running message
-      // otherwise. Never race a still-booting DEVONthink into an empty list.
-      let autoLaunch = DevonthinkSettings.autoLaunchDevonthink
-      let ready = await DEVONthinkBridge.ensureReady(autoLaunch: autoLaunch)
-      guard ready else {
-        return .retry(
-          CatalogMessageItem(
-            title: "DEVONthink Not Running",
-            message: "DEVONthink must be running to browse its databases.",
-            symbolName: "exclamationmark.triangle",
-            tintColor: .systemOrange))
-      }
-      switch DevonthinkAEBrowse.loadedDatabases() {
+      // MCP auto-launches DEVONthink on demand, so no readiness pre-check is
+      // needed — the query itself reports failure if DEVONthink isn't reachable.
+      switch await DevonthinkData.loadedDatabases() {
       case .success(let databases):
         return .loaded(databases.map {
           DevonthinkDatabaseItem(database: $0, catalogIdentifier: catalogIdentifier)
@@ -130,7 +102,7 @@ final class DevonthinkBrowseEntryItem: CatalogEntity, CatalogHierarchyNode, @unc
         return .retry(
           CatalogMessageItem(
             title: "DEVONthink Unavailable",
-            message: "Start DEVONthink to browse its databases.",
+            message: "Could not reach DEVONthink to browse its databases.",
             symbolName: "exclamationmark.triangle",
             tintColor: .systemOrange))
       }
@@ -402,17 +374,9 @@ private func devonthinkChildren(
   of uuid: String,
   catalogIdentifier: String?
 ) async -> DevonthinkHierarchyLoader.Outcome {
-  let ready = await DEVONthinkBridge.ensureReady(
-    autoLaunch: DevonthinkSettings.autoLaunchDevonthink)
-  guard ready else {
-    return .retry(
-      CatalogMessageItem(
-        title: "DEVONthink Not Running",
-        message: "Start DEVONthink to browse its contents.",
-        symbolName: "exclamationmark.triangle",
-        tintColor: .systemOrange))
-  }
-  switch DevonthinkAEBrowse.children(of: uuid) {
+  // MCP auto-launches DEVONthink on demand; the query itself reports failure if
+  // DEVONthink isn't reachable.
+  switch await DevonthinkData.children(of: uuid) {
   case .success(let children):
     return .loaded(
       devonthinkItems(from: children, catalogIdentifier: catalogIdentifier))
@@ -423,7 +387,7 @@ private func devonthinkChildren(
     return .retry(
       CatalogMessageItem(
         title: "DEVONthink Unavailable",
-        message: "Could not read DEVONthink contents. It may have quit or be unresponsive.",
+        message: "Could not read DEVONthink contents. It may not be reachable.",
         symbolName: "exclamationmark.triangle",
         tintColor: .systemOrange))
   }
@@ -519,7 +483,7 @@ final class DevonthinkDatabaseItem: CatalogEntity, CatalogHierarchyNode, @unchec
       await devonthinkChildren(
         of: uuid, catalogIdentifier: catalogIdentifier)
     }
-    super.init(id: database.path, title: database.name, path: database.path)
+    super.init(id: database.uuid, title: database.name, path: database.path)
     typeID = .devonthinkDatabase
   }
 
