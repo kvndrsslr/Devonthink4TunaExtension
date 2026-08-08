@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import os.log
 
@@ -42,8 +43,25 @@ enum DevonthinkMCP {
     }
   }
 
-  private static let executableURL = URL(
-    fileURLWithPath: "/Applications/DEVONthink.app/Contents/Library/LoginItems/DEVONthink MCP.app/Contents/MacOS/DEVONthink MCP")
+  /// Locate the DEVONthink MCP server executable. DEVONthink can live in non-
+  /// standard install locations, so resolve the app by bundle ID first and fall
+  /// back to the standard `/Applications` / `~/Applications` paths. If nothing
+  /// resolves, `Process.run()` throws and `startServer()` reports the usual
+  /// "DEVONthink MCP server could not be reached" failure.
+  private static var executableURL: URL {
+    let mcpPath = "Contents/Library/LoginItems/DEVONthink MCP.app/Contents/MacOS/DEVONthink MCP"
+    let bundleID = DEVONthinkBridge.bundleID
+    if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+      return appURL.appendingPathComponent(mcpPath)
+    }
+    let candidates = [
+      URL(fileURLWithPath: "/Applications/DEVONthink.app").appendingPathComponent(mcpPath),
+      URL(fileURLWithPath: NSHomeDirectory())
+        .appendingPathComponent("Applications/DEVONthink.app")
+        .appendingPathComponent(mcpPath),
+    ]
+    return candidates.first { FileManager.default.fileExists(atPath: $0.path) } ?? candidates[0]
+  }
 
   /// Locking model:
   /// - `requestLock` serializes callers so only one request is in flight.
@@ -242,13 +260,8 @@ enum DevonthinkMCP {
     guard initResult.success else { return false }
 
     // Notify initialized (notification — no response expected).
-    connection.stateLock.lock()
-    connection.requestCounter += 1
-    let notifyID = connection.requestCounter
-    connection.stateLock.unlock()
     if let notify = try? JSONSerialization.data(withJSONObject: [
       "jsonrpc": "2.0",
-      "id": notifyID,
       "method": "notifications/initialized",
       "params": [:],
     ]) {

@@ -7,7 +7,7 @@ public final class DevonthinkExtension: Extension {
     ExtensionDeclaration(
       metadata: ExtensionMetadata(
         displayName: "DEVONthink",
-        author: "Tuna",
+        author: "Kevin Dreßler",
         description: "Search DEVONthink 4 documents, capture notes, and open them in DEVONthink or with the default app.",
         iconName: "books.vertical"
       ),

@@ -30,7 +30,7 @@ final class DevonthinkSearchEntryItem: CatalogEntity, ActionFilteringProviding,
   init(catalogIdentifier: String) {
     _ = DevonthinkTypeRegistrations.registered
     self.catalogIdentifier = catalogIdentifier
-    super.init(id: "devonthink.databases", title: "Search", path: nil)
+    super.init(id: "devonthink.databases.search", title: "Search", path: nil)
     typeID = .devonthinkSearch
   }
 
@@ -107,8 +107,8 @@ final class DevonthinkBrowseEntryItem: CatalogEntity, CatalogHierarchyNode, @unc
             tintColor: .systemOrange))
       }
     }
-    super.init(id: "devonthink.browse", title: "Browse", path: nil)
-    typeID = .entity
+    super.init(id: "devonthink.databases.browse", title: "Browse", path: nil)
+    typeID = .searchCatalogEntry
   }
 
   override var detail: String? {
@@ -201,7 +201,12 @@ final class DevonthinkRecordItem: CatalogEntity, @unchecked Sendable {
 extension DevonthinkRecordItem: ActionFilteringProviding {
   func allowsAction(_ action: CatalogAction, catalogIdentifier: String?) -> Bool {
     // Our own open actions plus any universal file actions (Open, Reveal, etc.).
-    let ours = ["open-in-devonthink", "reveal-in-devonthink", "copy-item-link", "copy-uuid"]
+    let ours = [
+      DevonthinkActionIDs.openInDEVONthink,
+      DevonthinkActionIDs.revealInDEVONthink,
+      DevonthinkActionIDs.copyItemLink,
+      DevonthinkActionIDs.copyUUID,
+    ]
     if ours.contains(action.id) { return true }
     // Allow common built-in actions that apply to files.
     return action.id == "open" || action.id == "reveal" || action.id == "copy"
@@ -554,7 +559,12 @@ final class DevonthinkGroupItem: CatalogEntity, CatalogHierarchyNode, @unchecked
 
 extension DevonthinkGroupItem: ActionFilteringProviding {
   func allowsAction(_ action: CatalogAction, catalogIdentifier: String?) -> Bool {
-    let ours = ["open-in-devonthink", "reveal-in-devonthink", "copy-item-link", "copy-uuid"]
+    let ours = [
+      DevonthinkActionIDs.openInDEVONthink,
+      DevonthinkActionIDs.revealInDEVONthink,
+      DevonthinkActionIDs.copyItemLink,
+      DevonthinkActionIDs.copyUUID,
+    ]
     if ours.contains(action.id) { return true }
     return action.id == "open" || action.id == "reveal" || action.id == "copy"
   }

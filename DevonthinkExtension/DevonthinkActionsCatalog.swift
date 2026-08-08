@@ -75,15 +75,10 @@ public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
       } else {
         return .failure("No DEVONthink item selected")
       }
-      Task.detached(priority: .utility) {
-        // Use x-devonthink-item:// URL to reveal the item in DEVONthink's browser
-        if let url = URL(string: "x-devonthink-item://\(uuid)") {
-          _ = NSWorkspace.shared.open(url)
-        }
-      }
+      Task.detached(priority: .utility) { _ = await DevonthinkData.revealInDEVONthink(uuid: uuid) }
       return .success
     }
-    action.systemSymbolName = "magnifyingglass"
+    action.systemSymbolName = "doc.viewfinder"
     action.supportedSubjectTypes = [.devonthinkRecord, .devonthinkGroup]
     action.subjectPredicate = { $0 is DevonthinkRecordItem || $0 is DevonthinkGroupItem }
     return action
@@ -155,7 +150,7 @@ public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
         return .failure("Missing note text")
       }
       Task.detached(priority: .utility) {
-        DevonthinkData.createNote(from: body)
+        await DevonthinkData.createNote(from: body)
       }
       return .success
     }
@@ -181,7 +176,7 @@ public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
         return .failure("Missing note text")
       }
       Task.detached(priority: .utility) {
-        DevonthinkData.createNote(from: body)
+        await DevonthinkData.createNote(from: body)
       }
       return .success
     }
@@ -190,7 +185,7 @@ public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
     action.supportedSubjectTypes = [.application]
     action.allowedTargetTypes = [.textSnippet]
     action.subjectPredicate = { subject in
-      DevonthinkActionsCatalog.isDevonthinkApplication(subject)
+      DevonthinkActions.isDevonthinkApplication(subject)
     }
     action.targetPredicate = { $0?.textValueFallback() != nil }
     return action
@@ -264,12 +259,6 @@ private enum DevonthinkActions {
     else { return false }
     return Bundle(url: URL(fileURLWithPath: path))?.bundleIdentifier
       == DEVONthinkBridge.bundleID
-  }
-}
-
-private extension DevonthinkActionsCatalog {
-  static var isDevonthinkApplication: (CatalogItem?) -> Bool {
-    DevonthinkActions.isDevonthinkApplication
   }
 }
 

@@ -100,10 +100,10 @@ enum DevonthinkData {
   /// more as the user scrolls.
   static let pageSize = 25
 
-  /// Search and return one page of results. Page 0 is the first `pageSize`
-  /// records. Searches run through the DEVONthink MCP server, which auto-launches
-  /// DEVONthink on demand, so no liveness pre-check is needed — the call itself
-  /// reports failure if DEVONthink can't be reached.
+  /// Search and return one page of results. Tuna pages are 1-indexed; page 1
+  /// maps to MCP offset 0. Searches run through the DEVONthink MCP server, which
+  /// auto-launches DEVONthink on demand, so no liveness pre-check is needed —
+  /// the call itself reports failure if DEVONthink can't be reached.
   static func searchPage(query: String, page: Int, pageSize: Int = DevonthinkData.pageSize) async -> Result<(records: [DevonthinkRecord], hasMore: Bool), DevonthinkDataError> {
     let log = Logger(subsystem: "com.brnbw.Tuna", category: "Plugins")
     let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -358,34 +358,35 @@ enum DevonthinkData {
   /// tool. Unlike the old `x-devonthink://createText` URL scheme, this goes
   /// through DEVONthink's own server, which guarantees the text lands in the
   /// correct field regardless of special characters.
-  static func createText(title: String, text: String) -> Result<Void, DevonthinkDataError> {
-    let semaphore = DispatchSemaphore(value: 0)
-    var outcome: Result<Void, DevonthinkDataError> = .failure(.scriptFailed("Create did not complete"))
-    Task.detached(priority: .userInitiated) {
-      let result = await DevonthinkMCP.call(tool: "create_record", arguments: [
-        "name": title,
-        "type": "text",
-        "content": text,
-      ])
-      if result.success {
-        outcome = .success(())
-      } else {
-        outcome = .failure(selfFailureMessage(result))
-      }
-      semaphore.signal()
-    }
-    semaphore.wait()
-    return outcome
+  static func createText(title: String, text: String) async -> Result<Void, DevonthinkDataError> {
+    let result = await DevonthinkMCP.call(tool: "create_record", arguments: [
+      "name": title,
+      "type": "text",
+      "content": text,
+    ])
+    guard result.success else { return .failure(selfFailureMessage(result)) }
+    return .success(())
+  }
+
+  /// Derive a note title from its body: the first non-empty line, or "Note".
+  static func noteTitle(from body: String) -> String {
+    let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return "Note" }
+    return trimmed.split(separator: "\n", omittingEmptySubsequences: true).first.map(String.init) ?? "Note"
   }
 
   /// Create a new note in DEVONthink from arbitrary text. Derives the title
-  /// from the first non-empty line, then delegates to `createText`. Fire-and-forget.
-  static func createNote(from body: String) {
+  /// from the first non-empty line, then delegates to `createText`. Failure is
+  /// logged (the capture actions rely on this to signal capture errors rather
+  /// than failing silently).
+  static func createNote(from body: String) async {
+    let log = Logger(subsystem: "com.brnbw.Tuna", category: "Plugins")
     let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return }
-    let title = trimmed.split(separator: "\n", omittingEmptySubsequences: true)
-      .first.map(String.init) ?? "Note"
-    _ = createText(title: title, text: trimmed)
+    let title = noteTitle(from: trimmed)
+    if case .failure = await createText(title: title, text: trimmed) {
+      log.error("capture failed: note could not be created in DEVONthink")
+    }
   }
 
 
