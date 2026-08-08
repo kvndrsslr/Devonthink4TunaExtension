@@ -246,21 +246,45 @@ enum DevonthinkData {
 
   /// Return the immediate children of a database or group (by UUID) via
   /// `get_record_children`. Brief hits map identically to search results.
+  ///
+  /// Paged: DEVONthink's `get_record_children` cost explodes superlinearly with
+  /// result count — fetching a 361-child container in one call took ~5.9s while
+  /// paging it in ~100-record chunks totals ~0.5s — so we page in fixed chunks
+  /// and concatenate. Path and thumbnail enrichment run concurrently.
   static func children(of uuid: String) async -> Result<[DevonthinkRecord], DevonthinkDataError> {
-    let result = await DevonthinkMCP.call(tool: "get_record_children", arguments: [
-      "uuid": uuid,
-      "limit": 1000,
-    ])
-    guard result.success, let payload = result.dict else {
-      return .failure(selfFailureMessage(result))
+    let chunkSize = 100
+    var outputRecords: [DevonthinkRecord] = []
+    var briefs: [[String: Any]] = []
+    var offset = 0
+
+    // Page through the container in cheap chunks until we've seen everything.
+    while true {
+      let result = await DevonthinkMCP.call(tool: "get_record_children", arguments: [
+        "uuid": uuid,
+        "limit": chunkSize,
+        "offset": offset,
+      ])
+      guard result.success, let payload = result.dict else {
+        return .failure(selfFailureMessage(result))
+      }
+      let items = payload["items"] as? [[String: Any]] ?? []
+      let total = payload["total"] as? Int ?? (offset + items.count)
+
+      briefs += items
+      let fetched = offset + items.count
+      if items.isEmpty || fetched >= total { break }
+      offset = fetched
     }
-    guard let items = payload["items"] as? [[String: Any]], !items.isEmpty else {
-      return .failure(.noResults)
-    }
-    let parsed = items.compactMap { record(fromBrief: $0) }
-    await attachThumbnails(to: parsed)
-    let records = await attachFilePaths(to: parsed)
-    return .success(records)
+
+    guard !briefs.isEmpty else { return .failure(.noResults) }
+
+    let parsed = briefs.compactMap { record(fromBrief: $0) }
+
+    // Fetch thumbnails and paths concurrently — both are single batch calls.
+    async let thumbnails: Void = attachThumbnails(to: parsed)
+    async let paths: [DevonthinkRecord] = attachFilePaths(to: parsed)
+    let (_, enriched) = await (thumbnails, paths)
+    return .success(enriched)
   }
 
   // MARK: - Open / Reveal in DEVONthink (URL scheme, fire-and-forget)
