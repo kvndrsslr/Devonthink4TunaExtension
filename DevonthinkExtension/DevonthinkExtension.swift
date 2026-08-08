@@ -14,9 +14,9 @@ public final class DevonthinkExtension: Extension {
       compatibility: ExtensionDeclarationCompatibility(minTuna: "0.83", minTunaKit: "1.17.0"),
       catalogs: [
         CatalogDeclaration(
-          id: "devonthink.search",
-          type: DevonthinkCatalog.self,
-          name: "DEVONthink Search",
+          id: "devonthink.databases",
+          type: DevonthinkBrowseCatalog.self,
+          name: "DEVONthink",
           enabledByDefault: true,
           settings: [
             CatalogSettingDefinition(
@@ -33,7 +33,8 @@ public final class DevonthinkExtension: Extension {
               defaultValue: "0",
               description: "Search comparison mode: 0=contains, 1=begins with, 2=ends with, 3=equals, 4=wildcard, 5=fuzzy, 6=boolean."
             ),
-            DevonthinkSettings.autoLaunchSettingDefinition
+            DevonthinkSettings.autoLaunchSettingDefinition,
+            DevonthinkSettings.rawAESettingDefinition
           ])
       ],
       actionCatalogs: [
@@ -52,6 +53,10 @@ public final class DevonthinkExtension: Extension {
           displayName: "DEVONthink Groups",
           inheritsFrom: [TypeID("com.tuna.type.directory")]),
         TypeRegistrationDefinition(
+          typeID: TypeID("com.tuna.type.devonthink-database"),
+          displayName: "DEVONthink Database",
+          inheritsFrom: [TypeID("com.tuna.type.directory")]),
+        TypeRegistrationDefinition(
           typeID: TypeID("com.tuna.type.devonthink-search"),
           displayName: "DEVONthink Search",
           inheritsFrom: [TypeID("com.tuna.type.search-catalog-entry"), TypeID("com.tuna.type.entity")])
@@ -66,6 +71,15 @@ public final class DevonthinkExtension: Extension {
           typeID: TypeID("com.tuna.type.devonthink-group"),
           actions: [
             ActionReference(catalogIdentifier: "devonthink.actions", actionID: "open-in-devonthink")
+          ])
+      ],
+      appBrowseEnrichments: [
+        AppBrowseEnrichmentDefinition(
+          bundleIdentifiers: ["com.devon-technologies.think"],
+          entries: [
+            AppBrowseEnrichmentEntryDefinition(
+              catalogIdentifier: "devonthink.databases",
+              title: "Databases")
           ])
       ],
       appActionEnrichments: [

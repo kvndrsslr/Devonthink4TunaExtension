@@ -2,47 +2,47 @@ import AppKit
 import Foundation
 import TunaKit
 
-// MARK: - Scoped search (live query catalog)
+// MARK: - Browse (loaded databases hierarchy + search)
 
-/// Live DEVONthink search catalog. Exposes a single scoped-search entry:
-/// typing a query inside Tuna searches every open DEVONthink database and
-/// returns matching documents as `DevonthinkRecordItem`s.
+/// Browsable DEVONthink catalog. Lists every currently loaded database as the
+/// root of a navigable hierarchy: Tab/right-arrow into a database reveals its
+/// top-level groups and documents, and into a group reveals its deeper contents.
 ///
-/// This is the ONLY catalog — there is no full-enumeration catalog. The
-/// recursive tree walk required for full enumeration sends thousands of
-/// Apple Events and cannot be made crash-safe (Swift cannot catch ObjC
-/// NSException from ScriptingBridge if DEVONthink quits mid-walk). Scoped
-/// search sends ~16 Apple Events per page — a 99%+ reduction in crash
-/// surface — and never runs on launch, so Tuna opening no longer launches
-/// DEVONthink.
-///
-/// Follows the BrewExtension provider-backed search pattern: the catalog
-/// emits one meta item that conforms to `ScopedCatalogSearchProviding`,
-/// and Tuna asks it for results as the user types.
+/// Surfaced through `appBrowseEnrichments` when DEVONthink is the active app;
+/// also reachable directly by its catalog prefix.
 @MainActor
-public final class DevonthinkCatalog: NSObject, Catalog,
+public final class DevonthinkBrowseCatalog: NSObject, Catalog,
   RetainedCatalogStateReleasing
 {
   public let identifier: String
   public let name: String
 
   private let searchEntry: DevonthinkSearchEntryItem
+  private let browseEntry: DevonthinkBrowseEntryItem
 
-  public var objects: [CatalogItem] { [searchEntry] }
+  /// The catalog is purely static: it always lists the Search entry and the
+  /// Browse entry, and never queries DEVONthink at scan time. DEVONthink is
+  /// only contacted when the user triggers one of them — typing in Search, or
+  /// navigating into Browse.
+  public var objects: [CatalogItem] {
+    [searchEntry, browseEntry]
+  }
 
   public required init(definition: CatalogDefinition) {
     self.identifier = definition.identifier
     self.name = definition.name
     self.searchEntry = DevonthinkSearchEntryItem(catalogIdentifier: definition.identifier)
+    self.browseEntry = DevonthinkBrowseEntryItem(catalogIdentifier: definition.identifier)
     super.init()
   }
 
   public func releaseRetainedState() {
-    // No retained state — scoped search is stateless between queries.
+    // Drop any cached browse results so the next navigation into Browse
+    // re-queries DEVONthink for its currently loaded databases.
+    browseEntry.invalidate()
   }
 
   public func scan() async {
-    // Nothing to scan — results are fetched live via scopedSearchPage.
     reportScanFinished()
   }
 }
@@ -58,14 +58,14 @@ enum DevonthinkSettings {
   static let autoLaunchDefault = true
 
   static var pageSize: Int {
-    let store = CatalogSettingStore(catalogIdentifier: "devonthink.search")
+    let store = CatalogSettingStore(catalogIdentifier: "devonthink.databases")
     let raw = store.stringValue(for: pageSizeKey, defaultValue: pageSizeDefault)
     let value = Int(raw) ?? Int(pageSizeDefault) ?? 3
     return max(1, min(value, 50))
   }
 
   static var searchComparison: Int {
-    let store = CatalogSettingStore(catalogIdentifier: "devonthink.search")
+    let store = CatalogSettingStore(catalogIdentifier: "devonthink.databases")
     let raw = store.stringValue(for: searchComparisonKey, defaultValue: searchComparisonDefault)
     let value = Int(raw) ?? Int(searchComparisonDefault) ?? 0
     return max(0, min(value, 6))
@@ -77,7 +77,7 @@ enum DevonthinkSettings {
   /// the first search. When disabled, DEVONthink must already be running for
   /// search to work; otherwise an actionable "not running" item is shown.
   static var autoLaunchDevonthink: Bool {
-    let store = CatalogSettingStore(catalogIdentifier: "devonthink.search")
+    let store = CatalogSettingStore(catalogIdentifier: "devonthink.databases")
     return store.boolValue(for: autoLaunchSetting)
   }
 
@@ -93,5 +93,33 @@ enum DevonthinkSettings {
   /// The setting definition surfaced to Tuna for the auto-launch preference.
   static var autoLaunchSettingDefinition: CatalogSettingDefinition {
     autoLaunchSetting
+  }
+
+  // MARK: - Search transport (osascript vs raw in-process Apple Events)
+
+  enum SearchTransport {
+    case osascript
+    case rawAppleEvents
+  }
+
+  static let useRawAECKey = "UseRawAppleEvents"
+
+  /// Which engine drives search. Defaults to `.osascript` (the production,
+  /// subprocess-isolated path). `.rawAppleEvents` enables the in-process AE
+  /// engine for A/B performance comparison; it is opt-in.
+  static var searchTransport: SearchTransport {
+    let store = CatalogSettingStore(catalogIdentifier: "devonthink.databases")
+    return store.boolValue(for: rawAESetting) ? .rawAppleEvents : .osascript
+  }
+
+  private static let rawAESetting = CatalogSettingDefinition(
+    key: useRawAECKey,
+    type: .bool,
+    label: "Use in-process Apple Events (A/B test)",
+    defaultValue: "0",
+    description: "Search DEVONthink with raw in-process Apple Events instead of an osascript subprocess. Faster (no spawn/compile, bulk record fetch) but an experimental alternative — flip this to compare.")
+
+  static var rawAESettingDefinition: CatalogSettingDefinition {
+    rawAESetting
   }
 }

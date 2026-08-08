@@ -24,6 +24,17 @@ struct DevonthinkRecord: Hashable, Sendable {
   }
 }
 
+/// A loaded DEVONthink database (top-level container served by the browse
+/// catalog). `name` matches the database's AppleScript `name`; `uuid` is the
+/// database's stable record UUID (used to enumerate root contents via the same
+/// `children of` path as groups, which is the reliable enumeration form);
+/// `path` is the `.dtBase2` bundle path (the item's stable identity for Tuna).
+struct DevonthinkDatabase: Hashable, Sendable {
+  let name: String
+  let uuid: String
+  let path: String
+}
+
 enum DevonthinkDataError: Error, LocalizedError, Sendable {
   case devonthinkNotRunning
   case scriptFailed(String)
@@ -73,7 +84,12 @@ enum DevonthinkData {
     }
 
     let result = await Task.detached(priority: .userInitiated) {
-      Self.searchViaOSA(query: normalized, page: page, pageSize: pageSize)
+      switch DevonthinkSettings.searchTransport {
+      case .osascript:
+        return Self.searchViaOSA(query: normalized, page: page, pageSize: pageSize)
+      case .rawAppleEvents:
+        return Self.searchViaAE(query: normalized, page: page, pageSize: pageSize)
+      }
     }.value
 
     switch result {
@@ -141,6 +157,18 @@ enum DevonthinkData {
     }
 
     return Self.parseSearchOutput(output, page: page, pageSize: pageSize)
+  }
+
+  /// Raw-AE search engine (see `DevonthinkAESearch`). Paged: returns one page of
+  /// records with `hasMore`. Used when `DevonthinkSettings.searchTransport ==
+  /// .rawAppleEvents` for A/B comparison against `searchViaOSA`.
+  private static func searchViaAE(query: String, page: Int, pageSize: Int) -> Result<([DevonthinkRecord], Bool), DevonthinkDataError> {
+    // Re-check liveness right before — the process may have quit between the
+    // caller's check and now.
+    guard DEVONthinkBridge.isRunning() else {
+      return .failure(.devonthinkNotRunning)
+    }
+    return DevonthinkAESearch.search(query: query, page: page, pageSize: pageSize)
   }
 
   /// AppleScript source: search DT, emit one tab-delimited line per record in
@@ -326,7 +354,7 @@ enum DevonthinkData {
 
   /// Derive the database name from a record's filesystem path.
   /// DT4 stores files under `~/Databases/<Database Name>.dtBase2/Files.noindex/...`
-  private static func databaseName(from path: String?) -> String? {
+  static func databaseName(from path: String?) -> String? {
     guard let path = path?.trimmingCharacters(in: .whitespacesAndNewlines),
           !path.isEmpty else { return nil }
 

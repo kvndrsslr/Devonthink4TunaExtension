@@ -9,6 +9,7 @@ enum DevonthinkActionIDs {
   static let copyUUID = "copy-uuid"
   static let createNote = "create-note"
   static let createNoteFromApp = "create-note.from-app"
+  static let searchInDEVONthink = "search-in-devonthink"
 }
 
 public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
@@ -30,7 +31,8 @@ public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
       copyItemLinkAction(),
       copyUUIDAction(),
       createNoteAction(),
-      createNoteFromAppAction()
+      createNoteFromAppAction(),
+      searchInDEVONthinkAction()
     ]
   }
 
@@ -192,6 +194,55 @@ public final class DevonthinkActionsCatalog: NSObject, ActionCatalog {
     }
     action.targetPredicate = { $0?.textValueFallback() != nil }
     return action
+  }
+
+  // MARK: - Search in DEVONthink (verb on a text input)
+
+  /// "Search in DEVONthink" — opens the same scoped-search view used by the
+  /// other search triggers, prefilling the query from the selected text. It
+  /// does NOT shelf results and only applies to raw text input (not the
+  /// DEVONthink app).
+  ///
+  /// The search view is opened by conforming the action to
+  /// `SubjectScopedSearchActionProviding` (see the extension below); the
+  /// callback is a no-op fallback so nothing is shelved.
+  private static func searchInDEVONthinkAction() -> CatalogAction {
+    let action = PredicateAwareAction(
+      id: DevonthinkActionIDs.searchInDEVONthink,
+      title: "Search in DEVONthink"
+    ) { _, _ in
+      .success
+    }
+    action.systemSymbolName = "magnifyingglass"
+    action.supportedSubjectTypes = [.textSnippet]
+    action.subjectPredicate = { subject in
+      guard let subject, subject.typeID == .textSnippet else { return false }
+      return subject.textValueFallback() != nil
+    }
+    return action
+  }
+}
+
+// MARK: - Search-view routing
+
+/// Retrofitted conformance: when a `PredicateAwareAction` is the chosen result
+/// for a subject, Tuna asks it how to open the scoped-search view. Only the
+/// "Search in DEVONthink" action participates (a text snippet subject whose
+/// text becomes the prefilled query); every other action returns nil so its
+/// normal callback behavior is unchanged.
+extension PredicateAwareAction: SubjectScopedSearchActionProviding {
+  public var subjectScopedSearchRootCatalogIdentifier: String? {
+    id == DevonthinkActionIDs.searchInDEVONthink ? "devonthink.databases" : nil
+  }
+
+  public func subjectScopedSearchQuery(from subject: CatalogItem) -> String? {
+    guard id == DevonthinkActionIDs.searchInDEVONthink else { return nil }
+    return subject.textValueFallback()?.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  public func subjectScopedSearchRoot(for subject: CatalogItem) -> CatalogItem? {
+    guard id == DevonthinkActionIDs.searchInDEVONthink else { return nil }
+    return DevonthinkSearchEntryItem(catalogIdentifier: "devonthink.databases")
   }
 }
 

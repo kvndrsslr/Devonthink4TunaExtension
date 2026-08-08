@@ -1,5 +1,5 @@
 ARCH := $(shell uname -m)
-EXTENSION_SCHEMES := DevonthinkExtension QuickLookExtension
+EXTENSION_SCHEMES := DevonthinkExtension
 DESTINATION := generic/platform=macOS
 DEV_DESTINATION := platform=macOS,arch=$(ARCH)
 DERIVED_DATA := ./build/dd
