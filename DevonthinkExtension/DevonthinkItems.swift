@@ -178,6 +178,13 @@ final class DevonthinkRecordItem: CatalogEntity, @unchecked Sendable {
   }
 
   override func preview(maxDimension: CGFloat) -> CatalogItemPreview {
+    // When a DEVONthink thumbnail is cached for this record, surface it as the
+    // preview (and, in the result list, the icon) — a rendered cover rather
+    // than a generic file icon. Tuna renders the result-list icon from
+    // `preview(maxDimension:)`, so this is what puts the cover on each row.
+    if let thumbnail = DevonthinkThumbnails.image(for: record.uuid) {
+      return CatalogItemPreview(image: thumbnail)
+    }
     if record.path != nil {
       return super.preview(maxDimension: maxDimension)
     }

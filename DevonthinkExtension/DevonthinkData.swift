@@ -61,6 +61,29 @@ enum DevonthinkDataError: Error, LocalizedError, Sendable {
   }
 }
 
+/// In-memory cache of DEVONthink thumbnails, keyed by record UUID.
+///
+/// Thumbnails are fetched in batch (`get_record_thumbnails`) during page and
+/// container loads and decoded into `NSImage`s. Items read them synchronously
+/// from `image(size:)`, which Tuna calls to render the result-list and
+/// browse-grid icons. Keyed by the record's stable UUID so each record caches
+/// its own thumbnail across loads.
+enum DevonthinkThumbnails {
+  private static let lock = NSLock()
+  private static var cache: [String: NSImage] = [:]
+
+  /// The cached thumbnail for a record UUID, if one has been fetched.
+  static func image(for uuid: String) -> NSImage? {
+    lock.lock(); defer { lock.unlock() }
+    return cache[uuid]
+  }
+
+  static func store(_ image: NSImage, for uuid: String) {
+    lock.lock(); defer { lock.unlock() }
+    cache[uuid] = image
+  }
+}
+
 /// Data access to DEVONthink 4 via its bundled MCP stdio server.
 ///
 /// Every query runs through `DevonthinkMCP`, a persistent JSON-RPC client to
@@ -96,7 +119,9 @@ enum DevonthinkData {
       return .failure(selfFailureMessage(result))
     }
 
-    let records = await attachFilePaths(to: parseSearchResults(payload))
+    let parsed = parseSearchResults(payload)
+    await attachThumbnails(to: parsed)
+    let records = await attachFilePaths(to: parsed)
     let total = payload["total"] as? Int ?? records.count
     let sliceEnd = ((page - 1) * pageSize) + pageSize
     let hasMore = sliceEnd < total
@@ -127,6 +152,32 @@ enum DevonthinkData {
     return records.map { record in
       guard let path = pathByUUID[record.uuid] else { return record }
       return record.withPath(path)
+    }
+  }
+
+  /// Fetch and cache DEVONthink thumbnails for records via the batch
+  /// `get_record_thumbnails` tool. Each hit is `{uuid, data_uri}` where
+  /// `data_uri` is `data:image/jpeg;base64,<base64>`; the decoded image is
+  /// stored in `DevonthinkThumbnails` so `image(size:)` on items can render it
+  /// synchronously (Tuna calls that to draw the result-list / browse icons).
+  /// Records without a thumbnail (e.g. groups, indexed externals) are skipped.
+  private static func attachThumbnails(to records: [DevonthinkRecord]) async {
+    guard !records.isEmpty else { return }
+    let uuids = records.map(\.uuid)
+    let result = await DevonthinkMCP.call(tool: "get_record_thumbnails", arguments: [
+      "uuids": uuids,
+      "max_dim": 256,
+    ])
+    guard result.success, let payload = result.dict,
+          let hits = payload["results"] as? [[String: Any]] else { return }
+    for hit in hits {
+      guard let uuid = hit["uuid"] as? String,
+            let uri = hit["data_uri"] as? String,
+            let comma = uri.firstIndex(of: ",") else { continue }
+      let base64 = String(uri[uri.index(after: comma)...])
+      guard let data = Data(base64Encoded: base64),
+            let image = NSImage(data: data) else { continue }
+      DevonthinkThumbnails.store(image, for: uuid)
     }
   }
 
@@ -203,7 +254,9 @@ enum DevonthinkData {
     guard let items = payload["items"] as? [[String: Any]], !items.isEmpty else {
       return .failure(.noResults)
     }
-    let records = await attachFilePaths(to: items.compactMap { record(fromBrief: $0) })
+    let parsed = items.compactMap { record(fromBrief: $0) }
+    await attachThumbnails(to: parsed)
+    let records = await attachFilePaths(to: parsed)
     return .success(records)
   }
 
