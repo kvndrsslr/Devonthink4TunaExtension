@@ -30,7 +30,7 @@ final class DevonthinkSearchEntryItem: CatalogEntity, ActionFilteringProviding,
   init(catalogIdentifier: String) {
     _ = DevonthinkTypeRegistrations.registered
     self.catalogIdentifier = catalogIdentifier
-    super.init(id: "devonthink.databases.search", title: "Search", path: nil)
+    super.init(id: "devonthink.databases.search", title: "Search DEVONthink", path: nil)
     typeID = .devonthinkSearch
   }
 
@@ -109,7 +109,7 @@ final class DevonthinkBrowseEntryItem: CatalogEntity, CatalogHierarchyNode, @unc
             tintColor: .systemOrange))
       }
     }
-    super.init(id: "devonthink.databases.browse", title: "Browse", path: nil)
+    super.init(id: "devonthink.databases.browse", title: "Browse DEVONthink", path: nil)
     typeID = .searchCatalogEntry
   }
 
