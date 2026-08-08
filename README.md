@@ -1,7 +1,5 @@
 # DEVONthink for Tuna
 
-*by Kevin Dreßler*
-
 Search your DEVONthink databases, browse their contents, capture notes, and open records in DEVONthink (or with the default app) — all directly from [Tuna](https://tunaformac.com).
 
 The extension talks to DEVONthink through its **built-in MCP stdio server** (`DEVONthink MCP.app`), not AppleScript or ScriptingBridge. That server both answers queries against your open databases and **auto-launches DEVONthink on demand**, so search, browse, and capture all just work. Results are surfaced as typed, stably identified items (UUID-based IDs); records inherit from `com.tuna.type.file`, so the built-in Open, Reveal, and Copy actions work for free alongside the custom actions. Each row shows DEVONthink's own rendered thumbnail (e.g. a PDF cover) instead of a generic file icon.
