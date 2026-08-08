@@ -40,6 +40,10 @@ public final class DevonthinkBrowseCatalog: NSObject, Catalog,
     // Drop any cached browse results so the next navigation into Browse
     // re-queries DEVONthink for its currently loaded databases.
     browseEntry.invalidate()
+    // Tear down the spawned MCP server so a Tuna reload doesn't leak another
+    // `DEVONthink MCP --stdio` process. The client reconnects on the next call,
+    // so this is safe even if other data paths are still live.
+    DevonthinkMCP.shutdown()
   }
 
   public func scan() async {

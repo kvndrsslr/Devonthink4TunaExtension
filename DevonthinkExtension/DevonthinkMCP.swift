@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 /// Client for the DEVONthink MCP stdio server.
 ///
@@ -68,6 +69,11 @@ enum DevonthinkMCP {
 
   private static let connection = Connection()
 
+  /// Loose MCP lifecycle/error logging surfaced in `tuna-extension logs` (the
+  /// Tuna extension-host predicate) for diagnosing slow or stalled browses.
+  private static let log = Logger(
+    subsystem: "com.brnbw.Tuna", category: "Plugins")
+
   /// Run one MCP tool call and return its parsed result. Connects lazily on
   /// first use and reconnects if the server has exited. Never throws — returns
   /// a failed `CallResult` on any error so callers render a message item.
@@ -105,8 +111,16 @@ enum DevonthinkMCP {
       return CallResult(payload: nil, isError: true, errorMessage: "Could not encode MCP request.")
     }
 
+    let started = ContinuousClock.now
     let result = submitAndWait(id: id) {
       stdin.write(body + "\n".data(using: .utf8)!)
+    }
+    let elapsed = ContinuousClock.now - started
+    let ms = elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000
+    if result.isError {
+      log.error("mcp '\(tool)' failed in \(ms)ms: \(result.errorMessage ?? "unknown")")
+    } else {
+      log.notice("mcp '\(tool)' ok in \(ms)ms")
     }
 
     // A transport failure (not a tool-level error) makes the connection
@@ -145,6 +159,7 @@ enum DevonthinkMCP {
         connection.stateLock.lock()
         connection.activeID = nil
         connection.stateLock.unlock()
+        log.error("mcp request id \(id) timed out after 15s")
         return CallResult(payload: nil, isError: true, errorMessage: "DEVONthink MCP request timed out.")
       }
       _ = connection.responseSignal.wait(timeout: .now() + .milliseconds(50))
@@ -285,6 +300,44 @@ enum DevonthinkMCP {
       payload = try? JSONSerialization.jsonObject(with: textData)
     }
     return CallResult(payload: payload, isError: isError, errorMessage: nil)
+  }
+
+  // MARK: - Teardown
+
+  /// Terminate the spawned MCP server, if any. Safe to call anytime: the next
+  /// `call` (via `ensureConnected` → `startServer`) spawns a fresh server, so a
+  /// shutdown mid-session merely forces a reconnect. Without this the child
+  /// process outlives the extension host — macOS does not kill a parent's
+  /// children on exit — so every extension reload leaks another `DEVONthink
+  /// MCP --stdio` server. Each leaked server keeps a live connection into
+  /// DEVONthink, so over several rebuild/restart cycles they accumulate and
+  /// contend with the active query, which is what pushed the browse's
+  /// superlinear tail chunks past the request timeout. Called on browse
+  /// catalog teardown to keep the running Tuna session free of stale servers.
+  static func shutdown() {
+    connection.stateLock.lock()
+    let process = connection.process
+    connection.process = nil
+    connection.stdinHandle = nil
+    connection.stdoutHandle = nil
+    connection.isReady = false
+    connection.readBuffer.removeAll(keepingCapacity: true)
+    connection.stateLock.unlock()
+
+    // Send SIGTERM so the server can exit cleanly; fall back to SIGKILL if it
+    // doesn't go promptly. Best effort — the child is a throwaway subprocess.
+    // Deliberately does not take `requestLock`: this runs from the browse
+    // catalog's main-actor release path, and waiting on an in-flight request
+    // would stall teardown. Killing mid-request yields a failed `CallResult`
+    // for that caller, which is the intended reconnect-after-shutdown outcome.
+    if let process = process, process.isRunning {
+      process.terminate() // SIGTERM
+      DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(2)) {
+        if process.isRunning {
+          Darwin.kill(process.processIdentifier, SIGKILL)
+        }
+      }
+    }
   }
 }
 

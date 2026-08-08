@@ -259,6 +259,9 @@ final class DevonthinkHierarchyLoader: @unchecked Sendable {
 
   private let phase = LockedValue<Phase>(.idle)
   private let generation = LockedValue(0)
+  /// The generation value of the load currently driving progressive fills, so a
+  /// `publishMore` from a stale load can't append to a newer one's results.
+  private let activeGeneration = LockedValue(0)
   /// When the last retry was shown, so a retry isn't hot-looped by the
   /// `CatalogDidFinishScan` re-fetch that follows it while DEVONthink is down.
   private let lastRetryShown = LockedValue<Date>(.distantPast)
@@ -303,6 +306,35 @@ final class DevonthinkHierarchyLoader: @unchecked Sendable {
     }
   }
 
+  /// Append more resolved children to an already-loaded node and tell Tuna to
+  /// re-render. Powers the progressive fill of large containers: page 1 is
+  /// published via the normal `.loaded` finalize, then deeper pages arrive here
+  /// as they fetch. Safe from any thread; no-op if the node is no longer in the
+  /// `.loaded` state or the generation has moved on (e.g. the node was
+  /// invalidated and a fresh load started).
+  func publishMore(_ items: [CatalogItem]) {
+    guard !items.isEmpty else { return }
+    // Belongs to the current load's generation; if a newer load took over,
+    // this continuation is stale and must not clobber its results.
+    guard generation.readValue { $0 } == activeGeneration.value else { return }
+
+    let didAppend = phase.withValue { current -> Bool in
+      guard case .loaded(let existing) = current else { return false }
+      let known = Set(existing.map(\.id))
+      let fresh = items.filter { !known.contains($0.id) }
+      guard !fresh.isEmpty else { return false }
+      current = .loaded(existing + fresh)
+      return true
+    }
+    guard didAppend else { return }
+
+    guard let catalogIdentifier = catalogIdentifier else { return }
+    Task { @MainActor in
+      NotificationCenter.default.post(
+        name: CatalogDidFinishScan, object: catalogIdentifier)
+    }
+  }
+
   private func requestLoadIfNeeded() {
     let shouldStart = phase.withValue { current -> Bool in
       switch current {
@@ -321,6 +353,7 @@ final class DevonthinkHierarchyLoader: @unchecked Sendable {
 
     phase.value = .loading
     let myGeneration = generation.readValue { $0 }
+    activeGeneration.value = myGeneration
     Task.detached(priority: .utility) { [weak self] in
       let outcome = await (self?.load() ?? .loaded([]))
       await Task { @MainActor [weak self] in
@@ -350,9 +383,36 @@ final class DevonthinkHierarchyLoader: @unchecked Sendable {
     phase.value = .idle
     generation.withValue { $0 += 1 }
   }
+
+  /// Wait for the initial `.loaded` finalize of the current load to land, so a
+  /// progressive fill's first `publishMore` can't race it (if it ran first, the
+  /// finalize would overwrite the freshly-appended rows). Returns false if the
+  /// load became stale while waiting — the publish should abort.
+  func awaitingInitialLoad() async -> Bool {
+    let g = activeGeneration.value
+    for _ in 0..<200 {  // up to ~2s; the finalize lands almost immediately after `load()` returns
+      if generation.readValue { $0 } != g { return false }
+      let isLoaded = phase.readValue { current -> Bool in
+        if case .loaded = current { return true }
+        return false
+      }
+      if isLoaded { return true }
+      try? await Task.sleep(nanoseconds: 10_000_000)
+    }
+    return true // finalize didn't land in time; publish anyway
+  }
 }
 
-/// Map raw browse records into display items: groups become navigable
+/// Weak reference to a hierarchy loader, captured by an item's lazy-load closure
+/// so it can reach its own loader during a progressive fill. Capturing `self`
+/// directly in the closure would be disallowed (used before `super.init`), so a
+/// weak box is filled after the loader is constructed instead.
+private final class WeakLoaderRef: @unchecked Sendable {
+  weak var loader: DevonthinkHierarchyLoader?
+  init() {}
+}
+
+/// Maps raw browse records into display items: groups become navigable
 /// `DevonthinkGroupItem`s, documents become `DevonthinkRecordItem`s.
 private func devonthinkItems(
   from records: [DevonthinkRecord],
@@ -373,23 +433,50 @@ private func devonthinkItems(
 /// This is the single place that gates browsing on DEVONthink being alive and
 /// ready: it waits (auto-launching if enabled) before querying, so a cold or
 /// absent DEVONthink never surfaces as a misleading "empty" set. It also
-/// distinguishes a genuinely empty container (`children` returns `.noResults`,
-/// `.loaded([])`) from a transient failure (DEVONthink down/query error,
-/// `.retry(message)`), so a stale failure is never cached — browsing self-heals
-/// once DEVONthink is available again.
+/// distinguishes a genuinely empty container (`childrenPage` returns no
+/// records, `.loaded([])`) from a transient failure (DEVONthink down/query
+/// error, `.retry(message)`), so a stale failure is never cached — browsing
+/// self-heals once DEVONthink is available again.
 private func devonthinkChildren(
   of uuid: String,
-  catalogIdentifier: String?
+  catalogIdentifier: String?,
+  loader: DevonthinkHierarchyLoader?
 ) async -> DevonthinkHierarchyLoader.Outcome {
-  // MCP auto-launches DEVONthink on demand; the query itself reports failure if
-  // DEVONthink isn't reachable.
-  switch await DevonthinkData.children(of: uuid) {
-  case .success(let children):
-    return .loaded(
-      devonthinkItems(from: children, catalogIdentifier: catalogIdentifier))
-  case .failure(.noResults):
-    // DEVONthink is up but the container is genuinely empty.
-    return .loaded([])
+  // Progressive fill: `get_record_children` is superlinear in `offset` — the
+  // deepest page of a large container alone can take seconds. So surface page 0
+  // immediately as `.loaded`, and append the remaining pages in the background
+  // via `loader.publishMore`, so the user sees content near-instantly and the
+  // grid fills in progressively. Small batches (25) reveal the first content
+  // fastest and give a smoother granular fill; the offset tail still dominates
+  // total completion, but perceived latency is minimal.
+  let pageSize = 25
+  switch await DevonthinkData.childrenPage(of: uuid, offset: 0, limit: pageSize) {
+  case .success(let (first, hasMore)):
+    let firstItems = devonthinkItems(from: first, catalogIdentifier: catalogIdentifier)
+
+    if hasMore {
+      // Fetch the rest in the background, growing the rendered list page by page.
+      Task.detached(priority: .utility) { [loader, catalogIdentifier] in
+        // The initial `.loaded` finalize (page 0) must land before we append
+        // deeper pages, else we'd race it and lose rows.
+        guard await loader?.awaitingInitialLoad() ?? true else { return }
+        var offset = first.count
+        while true {
+          let result = await DevonthinkData.childrenPage(
+            of: uuid, offset: offset, limit: pageSize)
+          guard case .success(let (records, stillMore)) = result, !records.isEmpty else {
+            break
+          }
+          loader?.publishMore(
+            devonthinkItems(from: records, catalogIdentifier: catalogIdentifier))
+          guard stillMore else { break }
+          offset += records.count
+        }
+      }
+    }
+
+    return .loaded(firstItems)
+
   case .failure:
     return .retry(
       CatalogMessageItem(
@@ -411,13 +498,16 @@ final class DevonthinkGroupItem: CatalogEntity, CatalogHierarchyNode, @unchecked
   init(record: DevonthinkRecord, catalogIdentifier: String? = nil) {
     _ = DevonthinkTypeRegistrations.registered
     self.record = record
+    let loaderRef = WeakLoaderRef()
     self.loader = DevonthinkHierarchyLoader(
       catalogIdentifier: catalogIdentifier,
       emptyMessage: "This group contains no items."
-    ) { [uuid = record.uuid] in
+    ) { [uuid = record.uuid, loaderRef] in
       await devonthinkChildren(
-        of: uuid, catalogIdentifier: catalogIdentifier)
+        of: uuid, catalogIdentifier: catalogIdentifier,
+        loader: loaderRef.loader)
     }
+    loaderRef.loader = self.loader
     super.init(id: record.stableID, title: record.name, path: record.path)
     typeID = .devonthinkGroup
   }
@@ -483,13 +573,16 @@ final class DevonthinkDatabaseItem: CatalogEntity, CatalogHierarchyNode, @unchec
     _ = DevonthinkTypeRegistrations.registered
     self.database = database
     self.catalogIdentifier = catalogIdentifier
+    let loaderRef = WeakLoaderRef()
     self.loader = DevonthinkHierarchyLoader(
       catalogIdentifier: catalogIdentifier,
       emptyMessage: "This database contains no top-level items."
-    ) { [uuid = database.uuid] in
+    ) { [uuid = database.uuid, loaderRef] in
       await devonthinkChildren(
-        of: uuid, catalogIdentifier: catalogIdentifier)
+        of: uuid, catalogIdentifier: catalogIdentifier,
+        loader: loaderRef.loader)
     }
+    loaderRef.loader = self.loader
     super.init(id: database.uuid, title: database.name, path: database.path)
     typeID = .devonthinkDatabase
   }

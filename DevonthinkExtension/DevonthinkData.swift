@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import os.log
 import TunaKit
 
 struct DevonthinkRecord: Hashable, Sendable {
@@ -47,7 +48,6 @@ struct DevonthinkDatabase: Hashable, Sendable {
 enum DevonthinkDataError: Error, LocalizedError, Sendable {
   case devonthinkNotRunning
   case scriptFailed(String)
-  case noResults
 
   var errorDescription: String? {
     switch self {
@@ -55,8 +55,6 @@ enum DevonthinkDataError: Error, LocalizedError, Sendable {
       return "DEVONthink could not be reached. Open DEVONthink and try again."
     case .scriptFailed(let message):
       return "DEVONthink query failed: \(message)"
-    case .noResults:
-      return "No DEVONthink documents matched."
     }
   }
 }
@@ -107,8 +105,10 @@ enum DevonthinkData {
   /// DEVONthink on demand, so no liveness pre-check is needed — the call itself
   /// reports failure if DEVONthink can't be reached.
   static func searchPage(query: String, page: Int, pageSize: Int = DevonthinkData.pageSize) async -> Result<(records: [DevonthinkRecord], hasMore: Bool), DevonthinkDataError> {
+    let log = Logger(subsystem: "com.brnbw.Tuna", category: "Plugins")
     let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !normalized.isEmpty else { return .success(([], false)) }
+    log.notice("searchPage BEGIN query=\(normalized, privacy: .public) page=\(page) pageSize=\(pageSize)")
 
     // Tuna pages are 1-indexed; MCP offsets are 0-based.
     let offset = max(0, (page - 1) * pageSize)
@@ -123,8 +123,13 @@ enum DevonthinkData {
     }
 
     let parsed = parseSearchResults(payload)
-    await attachThumbnails(to: parsed)
+    // Paths (blocking) first so they take the MCP request lock; then fire
+    // thumbnails detached so a slow thumbnail generation can't stall the search
+    // results or trip the request timeout and empty the page.
     let records = await attachFilePaths(to: parsed)
+    Task.detached(priority: .utility) {
+      await attachThumbnails(to: parsed)
+    }
     let total = payload["total"] as? Int ?? records.count
     let sliceEnd = ((page - 1) * pageSize) + pageSize
     let hasMore = sliceEnd < total
@@ -166,13 +171,17 @@ enum DevonthinkData {
   /// Records without a thumbnail (e.g. groups, indexed externals) are skipped.
   private static func attachThumbnails(to records: [DevonthinkRecord]) async {
     guard !records.isEmpty else { return }
+    let log = Logger(subsystem: "com.brnbw.Tuna", category: "Plugins")
     let uuids = records.map(\.uuid)
     let result = await DevonthinkMCP.call(tool: "get_record_thumbnails", arguments: [
       "uuids": uuids,
       "max_dim": 256,
     ])
     guard result.success, let payload = result.dict,
-          let hits = payload["results"] as? [[String: Any]] else { return }
+          let hits = payload["results"] as? [[String: Any]] else {
+      log.error("attachThumbnails failed for \(uuids.count) uuids")
+      return
+    }
     for hit in hits {
       guard let uuid = hit["uuid"] as? String,
             let uri = hit["data_uri"] as? String,
@@ -247,44 +256,47 @@ enum DevonthinkData {
   /// Return the immediate children of a database or group (by UUID) via
   /// `get_record_children`. Brief hits map identically to search results.
   ///
-  /// Paged: DEVONthink's `get_record_children` cost explodes superlinearly with
-  /// result count — fetching a 361-child container in one call took ~5.9s while
-  /// paging it in ~100-record chunks totals ~0.5s — so we page in fixed chunks
-  /// and concatenate. Path and thumbnail enrichment run concurrently.
-  static func children(of uuid: String) async -> Result<[DevonthinkRecord], DevonthinkDataError> {
-    let chunkSize = 100
-    var outputRecords: [DevonthinkRecord] = []
-    var briefs: [[String: Any]] = []
-    var offset = 0
+  /// **Paged:** DEVONthink's `get_record_children` cost explodes superlinearly
+  /// with `offset` — fetching a 361-child container in one call (or paging it
+  /// to the end) totals ~6s, and the deepest page alone costs several seconds
+  /// because DEVONthink re-scans the result from the start to reach the offset.
+  /// The browse loader therefore shows the FIRST page (~100 records, ~0.2s)
+  /// immediately and appends the rest progressively via `childrenPage`, so the
+  /// user sees content near-instantly instead of waiting for the full
+  /// enumeration. Each page is independently enriched: file paths (blocking —
+  /// they gate open/reveal) and thumbnails (detached — icon decoration that
+  /// must never delay the page or trip the request timeout).
+  static func childrenPage(of uuid: String, offset: Int, limit: Int = 100) async -> Result<(records: [DevonthinkRecord], hasMore: Bool), DevonthinkDataError> {
+    let log = Logger(subsystem: "com.brnbw.Tuna", category: "Plugins")
+    let result = await DevonthinkMCP.call(tool: "get_record_children", arguments: [
+      "uuid": uuid,
+      "limit": limit,
+      "offset": offset,
+    ])
+    guard result.success, let payload = result.dict else {
+      return .failure(selfFailureMessage(result))
+    }
+    let items = payload["items"] as? [[String: Any]] ?? []
+    let total = payload["total"] as? Int ?? (offset + items.count)
 
-    // Page through the container in cheap chunks until we've seen everything.
-    while true {
-      let result = await DevonthinkMCP.call(tool: "get_record_children", arguments: [
-        "uuid": uuid,
-        "limit": chunkSize,
-        "offset": offset,
-      ])
-      guard result.success, let payload = result.dict else {
-        return .failure(selfFailureMessage(result))
-      }
-      let items = payload["items"] as? [[String: Any]] ?? []
-      let total = payload["total"] as? Int ?? (offset + items.count)
-
-      briefs += items
-      let fetched = offset + items.count
-      if items.isEmpty || fetched >= total { break }
-      offset = fetched
+    guard !items.isEmpty else {
+      return .success(([], offset + items.count < total))
     }
 
-    guard !briefs.isEmpty else { return .failure(.noResults) }
+    let parsed = items.compactMap { record(fromBrief: $0) }
 
-    let parsed = briefs.compactMap { record(fromBrief: $0) }
+    // Paths gate the result (open/reveal/preview). Run before thumbnails so
+    // they always take the MCP request lock first.
+    let enriched = await attachFilePaths(to: parsed)
 
-    // Fetch thumbnails and paths concurrently — both are single batch calls.
-    async let thumbnails: Void = attachThumbnails(to: parsed)
-    async let paths: [DevonthinkRecord] = attachFilePaths(to: parsed)
-    let (_, enriched) = await (thumbnails, paths)
-    return .success(enriched)
+    // Thumbnails are icon decoration with a kind-icon fallback; fire detached so
+    // a slow batch can't delay this page or trip the request timeout.
+    Task.detached(priority: .utility) {
+      await attachThumbnails(to: parsed)
+    }
+
+    log.notice("browse children page uuid=\(uuid, privacy: .public) offset=\(offset) got=\(parsed.count) hasMore=\(offset + items.count < total)")
+    return .success((enriched, offset + items.count < total))
   }
 
   // MARK: - Open / Reveal in DEVONthink (URL scheme, fire-and-forget)
