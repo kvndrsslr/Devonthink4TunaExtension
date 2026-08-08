@@ -33,7 +33,18 @@ This builds the extension in Debug, copies it to `~/Library/Application Support/
 ./scripts/tuna-extension package
 ```
 
-Builds a signed Release `.tunaextension` archive under `dist/store/`. Packaging requires a signed Release build and a Tuna installation to read the declaration. For non-interactive builds (e.g. CI) without a developer team selected in Xcode:
+Builds a signed Release `.tunaextension` archive under `dist/store/`. Packaging requires a
+signed Release build and a Tuna installation to read the declaration. **No paid Apple
+Developer account is required** — ad-hoc signing satisfies the local codesign check, and
+Tuna applies its own store signature during review/publication. To package with free
+ad-hoc signing on a machine with no Apple cert configured:
+
+```bash
+TUNA_CODE_SIGN_IDENTITY=- ./scripts/tuna-extension package
+```
+
+For non-interactive builds (e.g. CI) with an Apple Development identity set up in Xcode,
+pass the team and identity SHA-1 instead:
 
 ```bash
 security find-identity -v -p codesigning
