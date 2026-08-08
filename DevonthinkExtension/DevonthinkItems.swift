@@ -59,7 +59,7 @@ final class DevonthinkSearchEntryItem: CatalogEntity, ActionFilteringProviding,
     let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return ScopedSearchPage(items: [], hasMore: false) }
 
-    switch await DevonthinkData.searchPage(query: trimmed, page: page, pageSize: DevonthinkSettings.pageSize) {
+    switch await DevonthinkData.searchPage(query: trimmed, page: page) {
     case .success(let (records, hasMore)):
       return ScopedSearchPage(
         items: records.map(DevonthinkRecordItem.init(record:)),

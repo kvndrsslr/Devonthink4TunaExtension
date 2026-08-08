@@ -46,26 +46,3 @@ public final class DevonthinkBrowseCatalog: NSObject, Catalog,
     reportScanFinished()
   }
 }
-
-// MARK: - Settings
-
-enum DevonthinkSettings {
-  static let pageSizeKey = "PageSize"
-  static let pageSizeDefault = "7"
-  static let searchComparisonKey = "SearchComparison"
-  static let searchComparisonDefault = "0"
-
-  static var pageSize: Int {
-    let store = CatalogSettingStore(catalogIdentifier: "devonthink.databases")
-    let raw = store.stringValue(for: pageSizeKey, defaultValue: pageSizeDefault)
-    let value = Int(raw) ?? Int(pageSizeDefault) ?? 3
-    return max(1, min(value, 50))
-  }
-
-  static var searchComparison: Int {
-    let store = CatalogSettingStore(catalogIdentifier: "devonthink.databases")
-    let raw = store.stringValue(for: searchComparisonKey, defaultValue: searchComparisonDefault)
-    let value = Int(raw) ?? Int(searchComparisonDefault) ?? 0
-    return max(0, min(value, 6))
-  }
-}

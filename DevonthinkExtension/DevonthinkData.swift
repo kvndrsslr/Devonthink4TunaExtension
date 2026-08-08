@@ -96,8 +96,11 @@ enum DevonthinkData {
 
   // MARK: - Search (paged)
 
-  /// Page size for progressive search results.
-  static let pageSize = 3
+  /// Number of results to fetch per progressive-search page. Fixed internally —
+  /// MCP search is fast enough (milliseconds on a warm connection) that there's
+  /// no need to expose it as a user setting. Progressive paging still loads
+  /// more as the user scrolls.
+  static let pageSize = 25
 
   /// Search and return one page of results. Page 0 is the first `pageSize`
   /// records. Searches run through the DEVONthink MCP server, which auto-launches

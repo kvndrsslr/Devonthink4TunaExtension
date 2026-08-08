@@ -18,22 +18,7 @@ public final class DevonthinkExtension: Extension {
           type: DevonthinkBrowseCatalog.self,
           name: "DEVONthink",
           enabledByDefault: true,
-          settings: [
-            CatalogSettingDefinition(
-              key: "PageSize",
-              type: .string,
-              label: "Results per page",
-              defaultValue: "7",
-              description: "Number of results to load per page. Lower values show the first results faster."
-            ),
-            CatalogSettingDefinition(
-              key: "SearchComparison",
-              type: .string,
-              label: "Search Comparison",
-              defaultValue: "0",
-              description: "Search comparison mode: 0=contains, 1=begins with, 2=ends with, 3=equals, 4=wildcard, 5=fuzzy, 6=boolean."
-            )
-          ])
+          settings: [])
       ],
       actionCatalogs: [
         ActionCatalogDeclaration(
