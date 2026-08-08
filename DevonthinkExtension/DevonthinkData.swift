@@ -123,13 +123,16 @@ enum DevonthinkData {
     }
 
     let parsed = parseSearchResults(payload)
-    // Paths (blocking) first so they take the MCP request lock; then fire
-    // thumbnails detached so a slow thumbnail generation can't stall the search
-    // results or trip the request timeout and empty the page.
+    // Paths (blocking) take the MCP request lock first, then thumbnails. Unlike
+    // browse, the search result list has no re-scan to repaint rows it has
+    // already shown, so thumbnails must be cached BEFORE the page is returned —
+    // otherwise Tuna would paint the fallback file icon and (as there's no live
+    // repaint hook for search rows) keep it until the row scrolls out and back.
+    // Thumbnail fetch for a 25-item page is fast (~50ms) because each record is
+    // a separate `get_record_thumbnails` hit; it runs as its own MCP call, so a
+    // slow batch can't "empty" the already-parsed search results.
     let records = await attachFilePaths(to: parsed)
-    Task.detached(priority: .utility) {
-      await attachThumbnails(to: parsed)
-    }
+    await attachThumbnails(to: parsed)
     let total = payload["total"] as? Int ?? records.count
     let sliceEnd = ((page - 1) * pageSize) + pageSize
     let hasMore = sliceEnd < total

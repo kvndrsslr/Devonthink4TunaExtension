@@ -61,6 +61,8 @@ final class DevonthinkSearchEntryItem: CatalogEntity, ActionFilteringProviding,
 
     switch await DevonthinkData.searchPage(query: trimmed, page: page) {
     case .success(let (records, hasMore)):
+      // `searchPage` awaits thumbnail attachment, so every row here already has
+      // its DEVONthink cover in the shared cache — no post-render repaint dance.
       return ScopedSearchPage(
         items: records.map(DevonthinkRecordItem.init(record:)),
         hasMore: hasMore
