@@ -22,6 +22,14 @@ struct DevonthinkRecord: Hashable, Sendable {
     self.databaseName = databaseName
     self.kind = kind
   }
+
+  /// A copy with a new filesystem path. MCP record briefs carry no path, so it
+  /// is attached afterwards by the batch `get_imported_record_path` enrichment.
+  func withPath(_ newPath: String?) -> DevonthinkRecord {
+    DevonthinkRecord(
+      uuid: uuid, name: name, path: newPath,
+      location: location, databaseName: databaseName, kind: kind)
+  }
 }
 
 /// A loaded DEVONthink database (top-level container served by the browse
@@ -88,11 +96,38 @@ enum DevonthinkData {
       return .failure(selfFailureMessage(result))
     }
 
-    let records = parseSearchResults(payload)
+    let records = await attachFilePaths(to: parseSearchResults(payload))
     let total = payload["total"] as? Int ?? records.count
     let sliceEnd = ((page - 1) * pageSize) + pageSize
     let hasMore = sliceEnd < total
     return .success((records, hasMore))
+  }
+
+  /// Attach filesystem paths to records so Tuna can preview, open-in-default-app,
+  /// and reveal them. MCP record briefs carry no path, so it must be fetched
+  /// separately via the batch `get_imported_record_path` tool (one extra warm
+  /// round-trip). Records that don't resolve to a file (e.g. groups, indexed
+  /// externals) keep a nil path and fall back to a kind-based icon.
+  private static func attachFilePaths(to records: [DevonthinkRecord]) async -> [DevonthinkRecord] {
+    guard !records.isEmpty else { return records }
+    let uuids = records.map(\.uuid)
+    let result = await DevonthinkMCP.call(tool: "get_imported_record_path", arguments: ["uuids": uuids])
+    guard result.success, let payload = result.dict,
+          let hits = payload["results"] as? [[String: Any]] else {
+      return records
+    }
+    var pathByUUID: [String: String] = [:]
+    for hit in hits {
+      if let uuid = hit["uuid"] as? String,
+         let path = hit["path"] as? String, !path.isEmpty {
+        pathByUUID[uuid] = path
+      }
+    }
+    guard !pathByUUID.isEmpty else { return records }
+    return records.map { record in
+      guard let path = pathByUUID[record.uuid] else { return record }
+      return record.withPath(path)
+    }
   }
 
   // MARK: - MCP search parsing
@@ -168,7 +203,8 @@ enum DevonthinkData {
     guard let items = payload["items"] as? [[String: Any]], !items.isEmpty else {
       return .failure(.noResults)
     }
-    return .success(items.compactMap { record(fromBrief: $0) })
+    let records = await attachFilePaths(to: items.compactMap { record(fromBrief: $0) })
+    return .success(records)
   }
 
   // MARK: - Open / Reveal in DEVONthink (URL scheme, fire-and-forget)
