@@ -95,12 +95,11 @@ jobs:
           from pathlib import Path
           from zipfile import ZipFile
 
-          package = Path("dist/store/com.tunaextensions.devonthink-1.0.tunaextension")
           item = json.loads(Path("build/package-item.json").read_text())
+          package = Path("dist/store") / f"{item['id']}-{item['version']}.tunaextension"
 
           assert package.is_file()
           assert item["id"] == "com.tunaextensions.devonthink"
-          assert item["version"] == "1.0"
           assert item["compatibility"]["min_tuna"] == "0.80"
           assert item["compatibility"]["min_tunakit"] == "1.14.0"
           assert item["compatibility"]["min_macos"] == "15.0"
@@ -110,7 +109,8 @@ jobs:
 
           with ZipFile(package) as archive:
               manifest = json.loads(archive.read("tunaextension.json"))
-              assert manifest["id"] == "com.tunaextensions.devonthink"
+              assert manifest["id"] == item["id"]
+              assert manifest["version"] == item["version"]
               assert manifest["compatibility"]["min_tuna"] == "0.80"
               assert manifest["compatibility"]["min_tunakit"] == "1.14.0"
               assert "payload.sha256" in archive.namelist()
